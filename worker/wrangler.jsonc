@@ -1,0 +1,8 @@
+{
+  "name": "solas33-datahub",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-30",
+  "observability": { "enabled": true },
+  "r2_buckets": [{ "binding": "HUB", "bucket_name": "solas33-datahub" }],
+  "routes": [{ "pattern": "data.solas33.com", "custom_domain": true }]
+}

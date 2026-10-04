@@ -1,0 +1,63 @@
+# Hourly: restore hub state -> run due collectors -> publish changed files + snapshot to R2 -> save state.
+# Public repository, so GitHub Actions minutes are free. Org secret CF_API_TOKEN, org variable CF_ACCOUNT_ID.
+name: hub-collect-publish
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      args:
+        description: "extra args for tools.run (e.g. --all, --republish-all)"
+        required: false
+        default: ""
+
+concurrency:
+  group: datahub
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+      HUB_CONTACT: hello@solas33.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements.txt && npm i -g wrangler@4 >/dev/null
+      - name: Restore hub database
+        run: |
+          mkdir -p data
+          if git show origin/state:hub.db.gz > /tmp/hub.db.gz 2>/dev/null; then gunzip -c /tmp/hub.db.gz > data/hub.db && echo "restored $(du -h data/hub.db | cut -f1)"; else echo "fresh start"; fi
+      - name: Collect and publish
+        run: python -m tools.run ${{ github.event.inputs.args }}
+      - name: Save hub database to the state branch
+        if: always()
+        run: |
+          test -f data/hub.db || exit 0
+          python - <<'PY'
+          import sqlite3
+          c = sqlite3.connect("data/hub.db"); c.execute("PRAGMA wal_checkpoint(TRUNCATE)"); c.close()
+          PY
+          gzip -9 -c data/hub.db > /tmp/hub.db.gz
+          git config user.name "datahub-bot"; git config user.email "datahub-bot@users.noreply.github.com"
+          git checkout --orphan state-tmp
+          git rm -rf --quiet . || true
+          cp /tmp/hub.db.gz hub.db.gz
+          git add hub.db.gz
+          git commit -q -m "state $(date -u +%FT%H:%MZ)"
+          git push -f origin state-tmp:state

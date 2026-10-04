@@ -1,0 +1,20 @@
+# Two installable packages for Solas33 projects:
+#   s33weather - weather sources, blending, wind/solar physics, verification, calibration
+#   s33hub     - hub models + client (read the published snapshot / mirrors), and the collectors
+#   pip install "s33-datahub @ git+https://github.com/SOLAS33/datahub.git"
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "s33-datahub"
+version = "0.1.0"
+description = "Solas33 Data Hub: public Irish energy, grid and weather data with provenance, plus the s33weather toolkit"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27", "sqlalchemy>=2.0", "openpyxl>=3.1", "tzdata>=2024.1"]
+
+[tool.setuptools]
+packages = ["s33weather", "s33weather.sources", "s33weather.physics", "s33hub", "s33hub.collectors"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+.pytest_cache/
+.wrangler/
+node_modules/
+*.egg-info/
+build/
