@@ -1,16 +1,41 @@
-"""Every source the hub collects, in run order. Add a source: write a Collector, list it here."""
+"""Every source the hub collects. Add a source: write a Collector, list it here.
+
+Each collector declares its `domain`: "core" is the original hub (grid, weather, planning mirrors; one database, one snapshot, hourly job);
+every other domain is a self-contained job with its own small database and its own published files (see docs/ADDING_A_SOURCE.md).
+"""
 from __future__ import annotations
 
 from .base import Collector, last_run, make_client, run_collector
-from .eirgrid import EirGridLive
+from .catalogue import CkanOpenDatasets, DataGovIeCatalogue
 from .climate import ClimateDaily
+from .eirgrid import EirGridLive
 from .eirgrid_dd import EirGridDispatchDown
+from .energy_intl import NesoCarbon
+from .environment import MarineTideGauges, OpwWaterLevels
+from .governance import Oireachtas
 from .mirrors import AcpDataCentres, CsoMec02, PlanningDataCentres
+from .property import PropertyPriceRegister
+from .statistics import CsoPxStat, Eurostat
 from .tenders import EtendersOpenData, TedIreland
+from .transport import NtaGtfs
 from .weather import WeatherForecasts, WeatherObservations, WeatherWarnings
 
 REGISTRY: dict[str, Collector] = {c.key: c for c in (
-    EirGridLive(), EirGridDispatchDown(), WeatherForecasts(), WeatherObservations(), WeatherWarnings(),
-    PlanningDataCentres(), AcpDataCentres(), CsoMec02(), EtendersOpenData(), TedIreland(), ClimateDaily())}
+    # core: the original hourly hub
+    EirGridLive(), EirGridDispatchDown(), WeatherForecasts(), WeatherObservations(), WeatherWarnings(), PlanningDataCentres(), AcpDataCentres(), CsoMec02(),
+    # procurement
+    EtendersOpenData(), TedIreland(),
+    # climate and environment
+    ClimateDaily(), OpwWaterLevels(), MarineTideGauges(),
+    # statistics, property, transport, governance, energy abroad, catalogue
+    CsoPxStat(), Eurostat(), PropertyPriceRegister(), NtaGtfs(), Oireachtas(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
 
-__all__ = ["REGISTRY", "Collector", "last_run", "make_client", "run_collector"]
+CORE = "core"
+DOMAINS = sorted({c.domain for c in REGISTRY.values()} - {CORE})
+
+
+def for_domain(domain: str) -> dict[str, Collector]:
+    return {k: c for k, c in REGISTRY.items() if c.domain == domain}
+
+
+__all__ = ["CORE", "DOMAINS", "REGISTRY", "Collector", "for_domain", "last_run", "make_client", "run_collector"]

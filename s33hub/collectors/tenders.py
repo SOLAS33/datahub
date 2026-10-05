@@ -168,6 +168,7 @@ class EtendersOpenData(Collector):
                 "suppliers, awarded value and number of bids. Normalised CSV plus the untouched original.")
     used_by = ("tenderwatch",)
     interval_hours = 24.0
+    domain, tier = "procurement", "files"
 
     def locate(self, client: httpx.Client) -> str:
         try:
@@ -301,7 +302,11 @@ class TedIreland(Collector):
                 "(winner, value, bids received), by publication date. Every notice links to the original.")
     used_by = ("tenderwatch",)
     interval_hours = 6.0
+    domain, tier = "procurement", "rows"
     page = 250
+
+    def files(self, session: Session) -> dict[str, dict]:
+        return ted_files(session)
 
     def search(self, client: httpx.Client, query: str, page: int) -> dict:
         body = {"query": query, "fields": TED_FIELDS, "page": page, "limit": self.page, "scope": "ACTIVE", "paginationMode": "PAGE_NUMBER"}

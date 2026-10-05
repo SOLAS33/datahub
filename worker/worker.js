@@ -10,11 +10,45 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
+// The hub is several independent jobs (the core hub and one per domain). Each publishes its own v1/catalog/<domain>.json and
+// v1/status/<domain>.json; /v1/catalog.json and /v1/status.json are these merged, so existing readers keep working unchanged.
+export function mergeCatalogs(parts) {
+  const byPath = new Map();
+  for (const p of parts) for (const f of p.files || []) byPath.set(f.path, f);
+  const first = parts[0] || {};
+  return { generated_at: parts.map((p) => p.generated_at || "").sort().pop() || null, licence: first.licence, publisher: first.publisher, base: first.base,
+    domains: parts.map((p) => p.domain).filter(Boolean).sort(), files: [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : 1)) };
+}
+
+export function mergeStatuses(parts) {
+  return { generated_at: parts.map((p) => p.generated_at || "").sort().pop() || null, domains: parts.map((p) => p.domain).filter(Boolean).sort(),
+    sources: parts.flatMap((p) => p.sources || []).sort((a, b) => ((a.domain || "") + a.key < (b.domain || "") + b.key ? -1 : 1)) };
+}
+
+async function readParts(env, prefix) {
+  const parts = [];
+  let cursor;
+  do {
+    const r = await env.HUB.list({ prefix, cursor, limit: 100 });
+    for (const o of r.objects) {
+      const obj = await env.HUB.get(o.key);
+      if (obj) { try { parts.push(await obj.json()); } catch (e) { /* a half-written part is skipped, not fatal */ } }
+    }
+    cursor = r.truncated ? r.cursor : undefined;
+  } while (cursor);
+  return parts;
+}
+
+async function merged(env, kind) {
+  const parts = await readParts(env, `v1/${kind}/`);
+  if (parts.length) return kind === "catalog" ? mergeCatalogs(parts) : mergeStatuses(parts);
+  const obj = await env.HUB.get(`v1/${kind}.json`);          // before any domain has published: the legacy single file
+  return obj ? await obj.json() : kind === "catalog" ? { files: [] } : { sources: [] };
+}
+
 async function index(env) {
-  const obj = await env.HUB.get("v1/catalog.json");
-  const cat = obj ? await obj.json() : { files: [] };
-  const st = await env.HUB.get("v1/status.json");
-  const status = st ? await st.json() : { sources: [] };
+  const cat = await merged(env, "catalog");
+  const status = await merged(env, "status");
   const groups = {};
   for (const f of cat.files || []) {
     const g = f.path.split("/").slice(1, 3).join("/").replace(/\.(csv|json|gz)$/, "");
@@ -27,7 +61,7 @@ async function index(env) {
     return `<tr><td><a href="/${esc(first.path)}">${esc(first.path.replace(/^v1\//, ""))}</a>${more}</td><td>${esc(first.description)}</td>` +
       `<td>${esc(first.publisher)}</td><td class="m">${esc((first.updated || "").slice(0, 16).replace("T", " "))}</td></tr>`;
   }).join("");
-  const srcs = (status.sources || []).map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.publisher)}</td><td>every ${esc(s.every_hours)} h</td>` +
+  const srcs = (status.sources || []).map((s) => `<tr><td>${esc(s.name)} <span class="m">[${esc(s.domain || "core")}]</span></td><td>${esc(s.publisher)}</td><td>every ${esc(s.every_hours)} h</td>` +
     `<td><b class="${esc(s.state)}">${esc(s.state)}</b></td><td class="m">${esc((s.last_ok || "never").slice(0, 16).replace("T", " "))}</td>` +
     `<td class="m">${esc((s.used_by || []).join(", "))}</td></tr>`).join("");
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -70,6 +104,15 @@ export default {
     const url = new URL(request.url);
     const key = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
     if (key === "" || key === "index.html") return index(env);
+    if (key === "v1/catalog.json" || key === "v1/status.json") {
+      const ck = new Request(new URL(`/${key}`, request.url).toString());
+      const hit = await caches.default.match(ck);
+      if (hit) return hit;
+      const body = await merged(env, key.includes("catalog") ? "catalog" : "status");
+      const resp = new Response(JSON.stringify(body, null, 1), { headers: { "content-type": "application/json", "cache-control": "public, max-age=300", ...CORS } });
+      if (request.method === "GET") ctx.waitUntil(caches.default.put(ck, resp.clone()));
+      return resp;
+    }
     if (key.endsWith("/")) return listing(env, key);
     const cache = caches.default;
     const hit = await cache.match(request);

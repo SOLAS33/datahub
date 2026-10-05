@@ -1,0 +1,83 @@
+# Every 3 hours: one independent job per domain. Each restores its own small database from its own `state-<domain>` branch,
+# runs only that domain's due collectors, publishes only that domain's files to R2, and saves its state. A failing or slow
+# domain cannot hold up another. The core hub (grid, weather) keeps its own hourly workflow (hub.yml).
+# Public repository, so Actions minutes are free. Org secret CF_API_TOKEN, org variable CF_ACCOUNT_ID.
+name: hub-domains
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "run only this domain (blank = all)"
+        required: false
+        default: ""
+      args:
+        description: "extra args for tools.run (e.g. --all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    if: ${{ github.event.inputs.domain == '' || github.event.inputs.domain == matrix.domain }}
+    strategy:
+      fail-fast: false
+      matrix:
+        domain:
+          - catalogue
+          - climate
+          - energy_intl
+          - environment
+          - governance
+          - procurement
+          - property
+          - statistics
+          - transport
+    concurrency:
+      group: datahub-${{ matrix.domain }}
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+      HUB_CONTACT: hello@solas33.com
+      HUB_DOMAIN: ${{ matrix.domain }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements.txt && npm i -g wrangler@4 >/dev/null
+      - name: Restore this domain's database
+        run: |
+          mkdir -p data
+          if git show origin/state-${{ matrix.domain }}:${{ matrix.domain }}.db.gz > /tmp/d.db.gz 2>/dev/null; then gunzip -c /tmp/d.db.gz > data/${{ matrix.domain }}.db && echo "restored $(du -h data/${{ matrix.domain }}.db | cut -f1)"; else echo "fresh start"; fi
+      - name: Collect and publish
+        run: python -m tools.run --domain ${{ matrix.domain }} ${{ github.event.inputs.args }}
+      - name: Save this domain's database to its state branch
+        if: always()
+        run: |
+          test -f data/${{ matrix.domain }}.db || exit 0
+          python - <<'PY'
+          import os, sqlite3
+          c = sqlite3.connect(f"data/{os.environ['HUB_DOMAIN']}.db"); c.execute("PRAGMA wal_checkpoint(TRUNCATE)"); c.close()
+          PY
+          gzip -9 -c data/${{ matrix.domain }}.db > /tmp/d.db.gz
+          git config user.name "datahub-bot"; git config user.email "datahub-bot@users.noreply.github.com"
+          git checkout --orphan state-tmp
+          git rm -rf --quiet . || true
+          cp /tmp/d.db.gz ${{ matrix.domain }}.db.gz
+          git add ${{ matrix.domain }}.db.gz
+          git commit -q -m "state ${{ matrix.domain }} $(date -u +%FT%H:%MZ)"
+          git push -f origin state-tmp:state-${{ matrix.domain }}
