@@ -57,7 +57,7 @@ must not feed paid products until its row in the site's rights register says con
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
 |---|---|---|---|---|---|---|---|
-| `gb_carbon_intensity` | [Great Britain carbon intensity and generation mix (NESO / Carbon Intensity API)](https://carbonintensity.org.uk/) | National Energy System Operator (NESO) with the Carbon Intensity API partners | Creative Commons Attribution 4.0 | 6 h | rows | open | - |
+| `gb_carbon_intensity` | [Great Britain carbon intensity and generation mix (NESO / Carbon Intensity API)](https://carbonintensity.org.uk/) | National Energy System Operator (NESO) with the Carbon Intensity API partners | Creative Commons Attribution 4.0 | 6 h | rows | check | - |
 
 - **`gb_carbon_intensity`**: GB grid carbon intensity (gCO2/kWh, actual) and generation mix (% by fuel): daily min/max/mean since collection began (30 days back-filled).
 
@@ -65,8 +65,8 @@ must not feed paid products until its row in the site's rights register says con
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
 |---|---|---|---|---|---|---|---|
-| `opw_water_levels` | [OPW river and lake levels (waterlevel.ie)](https://waterlevel.ie/) | Office of Public Works (OPW) | Creative Commons Attribution 4.0 (OPW data; provisional, unvalidated) | 1 h | rows | open | - |
-| `marine_tide_gauges` | [Irish National Tide Gauge Network (Marine Institute)](https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.html) | Marine Institute | Creative Commons Attribution 4.0 | 3 h | rows | open | - |
+| `opw_water_levels` | [OPW river and lake levels (waterlevel.ie)](https://waterlevel.ie/) | Office of Public Works (OPW) | Creative Commons Attribution 4.0 (OPW data; provisional, unvalidated) | 1 h | rows | check | - |
+| `marine_tide_gauges` | [Irish National Tide Gauge Network (Marine Institute)](https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.html) | Marine Institute | Creative Commons Attribution 4.0 | 3 h | rows | check | - |
 
 - **`opw_water_levels`**: ~2,000 river, lake and tide readings across ~450 stations: station list, latest readings, and daily min/max/mean since collection began.
 - **`marine_tide_gauges`**: Real-time sea level at Irish tide gauges (m above Chart Datum and Malin Head OD): daily min/max/mean per gauge since collection began.
@@ -75,7 +75,7 @@ must not feed paid products until its row in the site's rights register says con
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
 |---|---|---|---|---|---|---|---|
-| `oireachtas` | [Oireachtas open data: members and bills](https://data.oireachtas.ie/) | Houses of the Oireachtas | Oireachtas open data licence (compatible with CC BY 4.0) | 24 h | files | open | - |
+| `oireachtas` | [Oireachtas open data: members and bills](https://data.oireachtas.ie/) | Houses of the Oireachtas | Oireachtas open data licence (compatible with CC BY 4.0) | 24 h | files | check | - |
 
 - **`oireachtas`**: Current members of the Dáil and Seanad (party, constituency) and every bill (title, status, stage, sponsor, origin house).
 

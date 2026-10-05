@@ -49,6 +49,7 @@ class NesoCarbon(Collector):
     provides = "GB grid carbon intensity (gCO2/kWh, actual) and generation mix (% by fuel): daily min/max/mean since collection began (30 days back-filled)."
     interval_hours = 6.0
     domain, tier = "energy_intl", "rows"
+    rights = "check"        # confirm the Carbon Intensity API / NESO terms before any paid use
 
     def run(self, session: Session, client: httpx.Client) -> Result:
         now = utcnow().replace(second=0, microsecond=0)

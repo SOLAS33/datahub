@@ -51,6 +51,7 @@ class OpwWaterLevels(Collector):
     provides = "~2,000 river, lake and tide readings across ~450 stations: station list, latest readings, and daily min/max/mean since collection began."
     interval_hours = 1.0
     domain, tier = "environment", "rows"
+    rights = "check"        # licence wording on waterlevel.ie not yet read by us; data is marked provisional
 
     def run(self, session: Session, client: httpx.Client) -> Result:
         raw = get_with_retry(client, OPW_URL, timeout=120).content
@@ -93,6 +94,7 @@ class MarineTideGauges(Collector):
     provides = "Real-time sea level at Irish tide gauges (m above Chart Datum and Malin Head OD): daily min/max/mean per gauge since collection began."
     interval_hours = 3.0
     domain, tier = "environment", "rows"
+    rights = "check"        # Marine Institute licence for this dataset not yet confirmed by us
     dataset = "IrishNationalTideGaugeNetwork"
 
     def run(self, session: Session, client: httpx.Client) -> Result:

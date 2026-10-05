@@ -48,6 +48,7 @@ class Oireachtas(Collector):
     provides = "Current members of the Dáil and Seanad (party, constituency) and every bill (title, status, stage, sponsor, origin house)."
     interval_hours = 24.0
     domain, tier = "governance", "files"
+    rights = "check"        # confirm the Oireachtas open data licence wording before any paid use
 
     def pages(self, client: httpx.Client, path: str, params: dict, size: int = 500) -> list[dict]:
         out, skip = [], 0
