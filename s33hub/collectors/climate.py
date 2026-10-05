@@ -9,6 +9,10 @@ what the weather was at or near a site. Sites read `v1/climate/stations.csv` and
 `v1/climate/daily/<id>.csv.gz` instead of contacting Met Éireann, so a request for evidence costs
 the source nothing and every figure traces to a file whose SHA-256 is in the catalogue.
 
+Rain quality indicator (rain_ind), as Met Éireann codes it: 0 satisfactory, 1 deposition, 2 trace or sum of precipitation,
+3 trace or sum of deposition, 4-7 estimated, 8 not available, 111 investigation required. It is kept so claims can show which
+days rest on estimated values.
+
 Each station file is trimmed to the columns that matter for delay claims, dates made ISO, units
 left exactly as published (knots, mm, degrees C), and the data-quality indicator for rain kept.
 Stations are refreshed a chunk at a time (CHUNK per run) so a first run or a monthly refresh never
@@ -73,7 +77,11 @@ def parse_daily(text: str) -> tuple[dict, list[list[str]]]:
         d = f"{int(m.group(3)):04d}-{MONTHS[m.group(2)]:02d}-{int(m.group(1)):02d}"
         row = [d]
         for src in KEEP:
-            v = p[col[src]].strip() if src in col and col[src] < len(p) else ""
+            if src == "irrd":      # the rain quality indicator is the unnamed 'ind' column just before 'rain'
+                i = col.get("rain", 0) - 1
+                v = p[i].strip() if i > 0 and hdr[i] == "ind" and i < len(p) else ""
+            else:
+                v = p[col[src]].strip() if src in col and col[src] < len(p) else ""
             row.append("" if v in ("", " ") else v)
         rows.append(row)
     return facts, rows

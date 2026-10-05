@@ -47,6 +47,7 @@ def test_met_eireann_daily_file():
     facts, rows = parse_daily(text)
     assert facts["name"] == "DUBLIN AIRPORT" and facts["lat"] == 53.428 and facts["lon"] == -6.241
     assert rows[0][0] == "2026-08-30" and rows[1][0] == "2026-09-01" and len(rows) == 2
+    assert rows[0][1] == "11.6" and rows[0][2] == "0" and rows[1][2] == "1"       # rain value and its quality indicator
 
 
 def test_ted_hit_parses_winner_value_bids():
