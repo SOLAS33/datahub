@@ -34,7 +34,9 @@ from sqlalchemy.orm import Session
 
 from s33weather import points
 
+from . import artifacts
 from .collectors import REGISTRY, last_run
+from .collectors.tenders import ted_files
 from .config import BUCKET, PUBLIC_BASE, settings
 from .db import utcnow
 from .models import (EVENT_LABELS, Farm, FetchLog, FuelMix, GridForecastSnap, GridReading, HubEvent, Mirror, MonthlyStat, ObservationRow,
@@ -156,6 +158,8 @@ def build(session: Session, months_back: int | None = None) -> dict[str, dict]:
         add(f"v1/mirror/{m.key}/latest.{m.ext}", m.body or b"", ctype, m.records, f"Raw mirror of {m.key} (latest)", m.key)
         if m.versioned_path:
             add(m.versioned_path, m.body or b"", ctype, m.records, f"Raw mirror of {m.key}, version {m.sha256[:12]}", m.key)
+    files.update(ted_files(session))        # TED notices by year (kept in the database)
+    files.update(artifacts.ARTIFACTS)       # large files a collector produced on this run (eTenders, climate stations)
     for ym in _months(session, FetchLog.retrieved_at, since):
         a, b = _month_range(ym)
         data, n = _csv(["id", "source", "retrieved_utc", "url", "sha256", "bytes", "issued_utc", "model_runs", "licence", "note"],
