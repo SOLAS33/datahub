@@ -26,6 +26,9 @@ public sources ──► hub (this repo, hourly GitHub Actions, free because the
 | `planning_npad_dc` | Raw mirror: council planning filings mentioning a data centre (ArcGIS) | 24 h | dcwatch |
 | `acp_cases_dc` | Raw mirror: An Coimisiún Pleanála cases mentioning a data centre | 24 h | dcwatch |
 | `cso_mec02` | Raw mirror: CSO MEC02 data-centre electricity (CSV as published) | 24 h | dcwatch |
+| `etenders_opendata` | OGP eTenders open dataset: every competition since 2013 with awards (suppliers, value, bids). Normalised CSV plus the untouched original | 24 h (file changes ~quarterly) | tenderwatch |
+| `ted_ireland` | TED notices from Irish buyers: contract notices (open tenders) and award notices (winner, value, bids), from 2024 | 6 h | tenderwatch |
+| `climate_daily` | Met Éireann daily climate records, ~520 stations with decades of rain, temperature, wind, sunshine. Refreshed a chunk of stations per run | 3 h (new data monthly) | tenderwatch |
 
 The current list, with health and last success, is at `/v1/status.json`. The file list is `/v1/catalog.json`.
 
@@ -43,6 +46,9 @@ The current list, with health and last success, is at `/v1/status.json`. The fil
 | `weather/warnings.json` | Warnings |
 | `weather/{points,stations}.csv` | Sampling points and stations |
 | `mirror/<key>/latest.*` and dated, hashed versions | Raw mirrors |
+| `tenders/etenders_notices.csv.gz`, `tenders/raw/<date>-<sha>.csv.gz` | eTenders competitions and awards, normalised; and the original file for audit |
+| `tenders/ted_notices/YYYY.csv` | TED notices from Irish buyers by publication year |
+| `climate/stations.csv`, `climate/daily/<id>.csv.gz` | Met Éireann stations and their daily records (units as published: mm, °C, knots) |
 | `ledger/YYYY-MM.csv` | Every payload: source, URL, time, SHA-256, model run |
 | `events.json` | New workbook months, warnings, records, source outages and recoveries |
 
@@ -63,6 +69,10 @@ doc, provenance = fetch_mirror("planning_npad_dc")      # raw source data + wher
 
 Install: `pip install "s33-datahub @ git+https://github.com/SOLAS33/datahub.git"`. This also
 installs `s33weather` (see `s33weather/README.md`).
+
+## Large files
+
+A collector can hand the publisher files that are too big to be database rows with `s33hub.artifacts.put(path, bytes, type, rows, desc, source)` (used by eTenders and climate). They are uploaded when produced and stay on R2 otherwise.
 
 ## Adding a source
 

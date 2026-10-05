@@ -2,9 +2,9 @@
 retrieval time, SHA-256 of the payload) or, for workbook figures, to file, sheet and cell."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import HubBase, utcnow
@@ -194,6 +194,28 @@ class Mirror(HubBase):
     body: Mapped[bytes | None] = mapped_column(LargeBinary)  # latest body, kept so it can be (re)published
 
 
+class TedNotice(HubBase):
+    """A TED notice from an Irish buyer: a contract notice (an open tender) or a contract award notice (winner, value, bids)."""
+    __tablename__ = "ted_notices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    publication_number: Mapped[str] = mapped_column(String(20), unique=True)
+    notice_type: Mapped[str | None] = mapped_column(String(30), index=True)
+    publication_date: Mapped[date | None] = mapped_column(Date, index=True)
+    buyer: Mapped[str | None] = mapped_column(String(300))
+    title: Mapped[str | None] = mapped_column(String(500))
+    cpv: Mapped[str | None] = mapped_column(String(10))
+    cpv_all: Mapped[str | None] = mapped_column(String(120))
+    nature: Mapped[str | None] = mapped_column(String(20))
+    estimated_value: Mapped[float | None] = mapped_column(Float)
+    award_value: Mapped[float | None] = mapped_column(Float)
+    winners: Mapped[str | None] = mapped_column(String(1000))
+    winner_size: Mapped[str | None] = mapped_column(String(40))
+    bids: Mapped[int | None] = mapped_column(Integer)
+    deadline: Mapped[date | None] = mapped_column(Date)
+    url: Mapped[str | None] = mapped_column(String(300))
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Published(HubBase):
     """What is on data.solas33.com: path -> SHA-256 of the bytes uploaded. Unchanged files are not re-uploaded."""
     __tablename__ = "published"
@@ -221,7 +243,7 @@ class SourceRun(HubBase):
 EVENT_LABELS = {
     "dd_month": "Curtailment figures", "warning_issued": "Weather warning", "warning_updated": "Warning updated",
     "wind_record": "Wind record", "capacity_change": "Capacity change", "source_failed": "Source failed",
-    "source_recovered": "Source recovered", "mirror_changed": "Source updated",
+    "source_recovered": "Source recovered", "mirror_changed": "Source updated", "tenders_dataset": "Tenders dataset updated",
 }
 
 
