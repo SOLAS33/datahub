@@ -42,7 +42,7 @@ def test_every_collector_declares_what_the_catalogue_needs():
 
 def test_ci_matrix_runs_every_domain():
     wf = (ROOT / ".github" / "workflows" / "hub-domains.yml").read_text(encoding="utf-8")
-    listed = set(re.findall(r"^\s+- ([a-z_]+)\s*$", wf.split("matrix:")[1].split("concurrency:")[0], re.M))
+    listed = set(json.loads(re.search(r"ALL='(\[.*?\])'", wf).group(1)))
     assert listed == set(DOMAINS), (listed ^ set(DOMAINS))
 
 
