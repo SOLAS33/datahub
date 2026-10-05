@@ -116,6 +116,7 @@ class ClimateDaily(Collector):
                 "station list with coordinates and coverage.")
     used_by = ("tenderwatch",)
     interval_hours = 3.0
+    domain, tier = "climate", "files"
 
     def run(self, session: Session, client: httpx.Client) -> Result:
         st = _state(session, self.key)

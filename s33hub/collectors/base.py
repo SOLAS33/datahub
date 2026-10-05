@@ -31,6 +31,13 @@ class Collector:
     provides: str = ""
     interval_hours: float = 3.0
     used_by: tuple[str, ...] = ()   # which sites consume it (documentation for the catalogue)
+    domain: str = "core"            # which hub job runs it: "core" (the original hourly hub) or a domain such as "procurement"
+    tier: str = "rows"              # where its data lives: rows (database tables), files (published tables/files), mirror (raw copy)
+    rights: str = "open"            # open = published under an open licence we rely on; check = reuse terms not yet confirmed
+
+    def files(self, session: Session) -> dict[str, dict]:  # pragma: no cover - optional
+        """Files this collector wants published on every build, from the database (e.g. TED notices by year). Default: none."""
+        return {}
 
     def run(self, session: Session, client: httpx.Client) -> Result:  # pragma: no cover - abstract
         raise NotImplementedError
@@ -40,12 +47,12 @@ def make_client() -> httpx.Client:
     return httpx.Client(timeout=settings.http_timeout, follow_redirects=True, headers={"User-Agent": settings.user_agent})
 
 
-def get_with_retry(client: httpx.Client, url: str, params: dict | None = None, tries: int = 3) -> httpx.Response:
+def get_with_retry(client: httpx.Client, url: str, params: dict | None = None, tries: int = 3, timeout: float | None = None) -> httpx.Response:
     import time
     last: Exception | None = None
     for attempt in range(tries):
         try:
-            r = client.get(url, params=params)
+            r = client.get(url, params=params, timeout=timeout) if timeout else client.get(url, params=params)
             r.raise_for_status()
             return r
         except (httpx.HTTPError, httpx.TransportError) as e:

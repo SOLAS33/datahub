@@ -19,6 +19,7 @@ import csv
 import gzip
 import hashlib
 import io
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import shutil
@@ -35,8 +36,7 @@ from sqlalchemy.orm import Session
 from s33weather import points
 
 from . import artifacts
-from .collectors import REGISTRY, last_run
-from .collectors.tenders import ted_files
+from .collectors import CORE, REGISTRY, for_domain, last_run
 from .config import BUCKET, PUBLIC_BASE, settings
 from .db import utcnow
 from .models import (EVENT_LABELS, Farm, FetchLog, FuelMix, GridForecastSnap, GridReading, HubEvent, Mirror, MonthlyStat, ObservationRow,
@@ -84,8 +84,34 @@ def _month_range(ym: str) -> tuple[datetime, datetime]:
     return start, end
 
 
-def build(session: Session, months_back: int | None = None) -> dict[str, dict]:
+def build_domain(session: Session, domain: str) -> dict[str, dict]:
+    """The files of one domain: what its collectors produced this run (artifacts), what they publish from their database
+    (`Collector.files`), their state/provenance mirrors, a ledger and events. No snapshot: sites read these files directly."""
+    files: dict[str, dict] = {}
+    cols = for_domain(domain)
+    for c in cols.values():
+        files.update(c.files(session))
+    files.update(artifacts.ARTIFACTS)
+    for m in session.scalars(select(Mirror).where(Mirror.key.in_(list(cols)))):
+        ctype = "application/json" if m.ext == "json" else "text/csv"
+        files[f"v1/mirror/{m.key}/latest.{m.ext}"] = dict(data=m.body or b"", type=ctype, rows=m.records, desc=f"Run state and provenance of {m.key} (latest)", source=m.key)
+    for ym in _months(session, FetchLog.retrieved_at, None):
+        a, b = _month_range(ym)
+        data, n = _csv(["id", "source", "retrieved_utc", "url", "sha256", "bytes", "issued_utc", "model_runs", "licence", "note"],
+                       ((f.id, f.source, f.retrieved_at, f.url, f.sha256, f.bytes, f.issued_at, json.dumps(f.model_runs) if f.model_runs else None, f.licence, f.note)
+                        for f in session.scalars(select(FetchLog).where(FetchLog.retrieved_at >= a, FetchLog.retrieved_at < b).order_by(FetchLog.id))))
+        files[f"v1/ledger/{domain}/{ym}.csv"] = dict(data=data, type="text/csv", rows=n, desc=f"Provenance ledger of the {domain} domain: every payload used", source="all")
+    evs = [dict(id=e.id, at=_iso(e.at), kind=e.kind, label=EVENT_LABELS.get(e.kind, e.kind), source=e.source, summary=e.summary, source_url=e.source_url)
+           for e in session.scalars(select(HubEvent).order_by(HubEvent.at.desc()).limit(300))]
+    files[f"v1/events/{domain}.json"] = dict(data=json.dumps(evs, indent=1).encode(), type="application/json", rows=len(evs), desc=f"Events of the {domain} domain", source="all")
+    files[f"v1/status/{domain}.json"] = dict(data=json.dumps(status(session, domain), indent=1).encode(), type="application/json", rows=None, desc=f"Health of the {domain} collectors", source="all")
+    return files
+
+
+def build(session: Session, months_back: int | None = None, domain: str = CORE) -> dict[str, dict]:
     """{path: {data, type, rows, desc, source}}. months_back limits monthly partitions to recent ones."""
+    if domain != CORE:
+        return build_domain(session, domain)
     files: dict[str, dict] = {}
 
     def add(path, data, ctype, rows=None, desc="", source=""):
@@ -158,8 +184,7 @@ def build(session: Session, months_back: int | None = None) -> dict[str, dict]:
         add(f"v1/mirror/{m.key}/latest.{m.ext}", m.body or b"", ctype, m.records, f"Raw mirror of {m.key} (latest)", m.key)
         if m.versioned_path:
             add(m.versioned_path, m.body or b"", ctype, m.records, f"Raw mirror of {m.key}, version {m.sha256[:12]}", m.key)
-    files.update(ted_files(session))        # TED notices by year (kept in the database)
-    files.update(artifacts.ARTIFACTS)       # large files a collector produced on this run (eTenders, climate stations)
+    files.update(artifacts.ARTIFACTS)       # files a core collector produced on this run (none today; kept for symmetry with the domains)
     for ym in _months(session, FetchLog.retrieved_at, since):
         a, b = _month_range(ym)
         data, n = _csv(["id", "source", "retrieved_utc", "url", "sha256", "bytes", "issued_utc", "model_runs", "licence", "note"],
@@ -170,18 +195,19 @@ def build(session: Session, months_back: int | None = None) -> dict[str, dict]:
                 source_url=e.source_url, event_date=_iso(e.event_date)) for e in session.scalars(select(HubEvent).order_by(HubEvent.at.desc()).limit(500))]
     add("v1/events.json", json.dumps(evs, indent=1).encode(), "application/json", len(evs), "Source-level events (new workbook months, warnings, records, outages)", "all")
     add("v1/status.json", json.dumps(status(session), indent=1).encode(), "application/json", None, "Health of every collector", "all")
+    add("v1/status/core.json", json.dumps(status(session), indent=1).encode(), "application/json", None, "Health of the core collectors", "all")
     return files
 
 
-def status(session: Session) -> dict:
+def status(session: Session, domain: str = CORE) -> dict:
     out = []
-    for key, c in REGISTRY.items():
+    for key, c in for_domain(domain).items():
         run, ok = last_run(session, key), last_run(session, key, ok_only=True)
         stale = ok is None or (utcnow() - ok.started_at) > timedelta(hours=max(3, c.interval_hours * 3))
-        out.append(dict(key=key, name=c.name, publisher=c.publisher, licence=c.licence, url=c.url, provides=c.provides, every_hours=c.interval_hours,
-                        used_by=list(c.used_by), state="failing" if run and not run.ok else "stale" if stale else "healthy",
+        out.append(dict(key=key, name=c.name, domain=c.domain, tier=c.tier, rights=c.rights, publisher=c.publisher, licence=c.licence, url=c.url, provides=c.provides,
+                        every_hours=c.interval_hours, used_by=list(c.used_by), state="failing" if run and not run.ok else "stale" if stale else "healthy",
                         last_ok=_iso(ok.started_at) if ok else None, last_message=run.message if run else None))
-    return dict(generated_at=_iso(utcnow()), sources=out)
+    return dict(generated_at=_iso(utcnow()), domain=domain, sources=out)
 
 
 def snapshot_bytes() -> bytes:
@@ -201,7 +227,7 @@ def snapshot_bytes() -> bytes:
         return buf.getvalue()
 
 
-def catalog(published: list[Published], meta: dict[str, dict]) -> bytes:
+def catalog(published: list[Published], meta: dict[str, dict], domain: str = CORE) -> bytes:
     """Every file currently on data.solas33.com, from the `published` table (true size and hash),
     described from this run's build where available, else from the description of its family."""
     family = {}
@@ -214,15 +240,32 @@ def catalog(published: list[Published], meta: dict[str, dict]) -> bytes:
         items.append(dict(path=p.path, url=f"{PUBLIC_BASE}/{p.path}", bytes=p.bytes, sha256=p.sha256, rows=p.rows, updated=_iso(p.uploaded_at),
                           description=desc, source=source or None, publisher=c.publisher if c else "Solas33 Data Hub",
                           source_licence=c.licence if c else None, source_url=c.url if c else None, used_by=list(c.used_by) if c else []))
-    return json.dumps(dict(generated_at=_iso(utcnow()), licence=LICENCE, publisher="Solas33 Data Hub", base=PUBLIC_BASE, files=items), indent=1).encode()
+    return json.dumps(dict(generated_at=_iso(utcnow()), domain=domain, licence=LICENCE, publisher="Solas33 Data Hub", base=PUBLIC_BASE, files=items), indent=1).encode()
 
 
 class Uploader:
-    """Uploads to R2 with `wrangler r2 object put` (same Cloudflare credentials as deploys)."""
+    """Uploads to R2 with `wrangler r2 object put` (same Cloudflare credentials as deploys). `put_many` runs several at once:
+    each upload is a separate process, so a domain with hundreds of files takes minutes rather than an hour."""
 
-    def __init__(self, dry_run: bool = False):
+    def __init__(self, dry_run: bool = False, workers: int = 6):
         self.dry_run = dry_run
+        self.workers = workers
         self.npx = "npx.cmd" if sys.platform == "win32" else "npx"
+
+    def put_many(self, items: list[tuple[str, bytes, str, str]]) -> None:
+        """items: [(path, data, content-type, cache-control)]. Every upload is attempted; the first failure is raised afterwards."""
+        if not items:
+            return
+        errors: list[Exception] = []
+        with ThreadPoolExecutor(max_workers=max(1, self.workers)) as ex:
+            futs = [ex.submit(self.put, *it) for it in items]
+            for f in futs:
+                try:
+                    f.result()
+                except Exception as e:  # noqa: BLE001
+                    errors.append(e)
+        if errors:
+            raise errors[0]
 
     def put(self, path: str, data: bytes, ctype: str, cache: str) -> None:
         if self.dry_run:
@@ -240,31 +283,53 @@ class Uploader:
             os.unlink(tmp)
 
 
-def publish(session: Session, uploader: Uploader, months_back: int | None = 2, include_snapshot: bool = True) -> dict:
-    files = build(session, months_back)
+class DiskUploader(Uploader):
+    """Writes the files under a local directory instead of R2: for local runs, tests, and seeding a site's data folder."""
+
+    def __init__(self, root):
+        super().__init__(dry_run=False, workers=1)
+        self.root = Path(root)
+
+    def put(self, path: str, data: bytes, ctype: str, cache: str) -> None:
+        dest = self.root / path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+
+
+BATCH = 24
+
+
+def publish(session: Session, uploader: Uploader, months_back: int | None = 2, include_snapshot: bool = True, domain: str = CORE) -> dict:
+    files = build(session, months_back, domain)
     prev = {p.path: p for p in session.scalars(select(Published))}
-    uploaded = skipped = 0
+    pending: list[tuple[str, bytes, str, str, str]] = []
+    skipped = 0
     for path, f in sorted(files.items()):
         digest = hashlib.sha256(f["data"]).hexdigest()
         if path in prev and prev[path].sha256 == digest:
             skipped += 1
             continue
-        live = path.endswith(("latest.json", "latest.csv", "status.json", "events.json", "forecast_latest.csv", "warnings.json")) or \
+        live = path.endswith(("latest.json", "latest.csv", "status.json", "events.json", "forecast_latest.csv", "warnings.json")) or "/status/" in path or "/events/" in path or \
             path.split("/")[-1][:7] == utcnow().strftime("%Y-%m")
-        uploader.put(path, f["data"], f["type"] + ("; charset=utf-8" if f["type"].startswith("text") else ""), "public, max-age=300" if live else "public, max-age=86400")
-        row = prev.get(path) or Published(path=path)
-        row.sha256, row.bytes, row.rows, row.uploaded_at = digest, len(f["data"]), f["rows"], utcnow()
-        session.add(row)
+        pending.append((path, f["data"], f["type"] + ("; charset=utf-8" if f["type"].startswith("text") else ""), "public, max-age=300" if live else "public, max-age=86400", digest))
+    uploaded = 0
+    for i in range(0, len(pending), BATCH):               # batches, so progress is recorded even if a later batch fails or the job is cut off
+        batch = pending[i:i + BATCH]
+        uploader.put_many([(p, d, t, c) for p, d, t, c, _ in batch])
+        for path, data, _, _, digest in batch:
+            row = prev.get(path) or Published(path=path)
+            row.sha256, row.bytes, row.rows, row.uploaded_at = digest, len(data), files[path]["rows"], utcnow()
+            session.add(row)
         session.commit()
-        uploaded += 1
-    cat = catalog(list(session.scalars(select(Published))), files)
-    uploader.put("v1/catalog.json", cat, "application/json", "public, max-age=300")
+        uploaded += len(batch)
+    cat = catalog(list(session.scalars(select(Published))), files, domain)
+    uploader.put(f"v1/catalog/{domain}.json", cat, "application/json", "public, max-age=300")
     snap = None
-    if include_snapshot:
-        snap = snapshot_bytes()
-        uploader.put("v1/hub.sqlite.gz", snap, "application/gzip", "public, max-age=300")
-        uploader.put("v1/hub.sqlite.json", json.dumps(dict(generated_at=_iso(utcnow()), bytes=len(snap), sha256=hashlib.sha256(snap).hexdigest())).encode(),
-                     "application/json", "public, max-age=60")
+    if domain == CORE:
+        uploader.put("v1/catalog.json", cat, "application/json", "public, max-age=300")      # legacy path, until every reader uses the merged catalogue
+        if include_snapshot:
+            snap = snapshot_bytes()
+            uploader.put("v1/hub.sqlite.gz", snap, "application/gzip", "public, max-age=300")
+            uploader.put("v1/hub.sqlite.json", json.dumps(dict(generated_at=_iso(utcnow()), bytes=len(snap), sha256=hashlib.sha256(snap).hexdigest())).encode(),
+                         "application/json", "public, max-age=60")
     return dict(files=len(files), uploaded=uploaded, skipped=skipped, snapshot_bytes=len(snap) if snap else 0)
-
-

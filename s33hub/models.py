@@ -216,6 +216,24 @@ class TedNotice(HubBase):
     first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class DailyStat(HubBase):
+    """Daily min/max/mean of a variable at a station, for sources that only expose their latest value (river levels, tide gauges,
+    GB carbon intensity). One row per dataset, station, variable and day; readings are folded in as they arrive."""
+    __tablename__ = "daily_stats"
+    __table_args__ = (UniqueConstraint("dataset", "station", "var", "day"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset: Mapped[str] = mapped_column(String(60), index=True)
+    station: Mapped[str] = mapped_column(String(120))
+    var: Mapped[str] = mapped_column(String(60))
+    day: Mapped[date] = mapped_column(Date, index=True)
+    n: Mapped[int] = mapped_column(Integer, default=0)
+    vmin: Mapped[float] = mapped_column(Float)
+    vmax: Mapped[float] = mapped_column(Float)
+    vsum: Mapped[float] = mapped_column(Float)
+    last_ts: Mapped[datetime | None] = mapped_column(DateTime)
+    unit: Mapped[str | None] = mapped_column(String(20))
+
+
 class Published(HubBase):
     """What is on data.solas33.com: path -> SHA-256 of the bytes uploaded. Unchanged files are not re-uploaded."""
     __tablename__ = "published"

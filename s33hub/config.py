@@ -10,8 +10,12 @@ PUBLIC_BASE = os.environ.get("HUB_PUBLIC_BASE", "https://data.solas33.com")
 BUCKET = os.environ.get("HUB_BUCKET", "solas33-datahub")
 
 
+CORE = "core"
+
+
 @dataclass
 class Settings:
+    domain: str = os.environ.get("HUB_DOMAIN", CORE)
     data_dir: Path = field(default_factory=lambda: Path(os.environ.get("HUB_DATA_DIR", ROOT / "data")))
     database_url: str = ""
     contact: str = os.environ.get("HUB_CONTACT", "hello@solas33.com")
@@ -21,7 +25,8 @@ class Settings:
 
     def __post_init__(self) -> None:
         if not self.database_url:
-            self.database_url = os.environ.get("HUB_DATABASE_URL", f"sqlite:///{(self.data_dir / 'hub.db').as_posix()}")
+            name = "hub" if self.domain == CORE else self.domain
+            self.database_url = os.environ.get("HUB_DATABASE_URL", f"sqlite:///{(self.data_dir / (name + '.db')).as_posix()}")
 
     @property
     def user_agent(self) -> str:

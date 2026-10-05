@@ -14,23 +14,36 @@ public sources ──► hub (this repo, hourly GitHub Actions, free because the
                          gridwatch, dcwatch, future sites ─ read ───────┘
 ```
 
-## Sources
+## How the hub is organised
+
+The hub is **domains**, not one pile. `core` is the original hub (grid, weather, planning mirrors): one database, one snapshot `hub.sqlite.gz`, an hourly job. Every other domain is an independent job with its own small database and its own published files, run every 3 hours by a CI matrix (`.github/workflows/hub-domains.yml`). A site downloads only the files it needs; a slow or failing domain cannot hold up another; the shared snapshot does not grow. `/v1/catalog.json` and `/v1/status.json` are the merge of every domain.
+
+| Domain | Sources |
+|---|---|
+| core | EirGrid live and dispatch-down, Met Éireann/MET Norway forecasts, observations, warnings, planning and An Coimisiún Pleanála mirrors, CSO data-centre electricity |
+| procurement | eTenders open dataset (87k competitions, awards), TED notices from Irish buyers |
+| climate | Met Éireann daily climate records, ~520 stations |
+| environment | OPW river and lake levels, Marine Institute tide gauges (daily min/max/mean), EPA: 42 GeoServer layers (licensed facilities, emission points, water and air monitoring) and bathing water |
+| business | Companies Registration Office: every company (825k), new registrations by month, filed accounts |
+| statistics | 48 CSO PxStat tables, 8 Eurostat datasets |
+| property | Residential Property Price Register (no street addresses), monthly county medians |
+| transport | NTA GTFS agencies, routes, stops |
+| governance | Oireachtas members and bills |
+| energy_intl | Great Britain carbon intensity and generation mix |
+| catalogue | index of all ~22,000 data.gov.ie datasets; mirrors of selected Revenue, TII and Dublin counter datasets |
+
+Full register with licences, cadence, tier and rights: [docs/SOURCES.md](docs/SOURCES.md) (generated from the code). To add a source: [docs/ADDING_A_SOURCE.md](docs/ADDING_A_SOURCE.md).
+
+## Sources in the core hub
 
 | Key | Source | Every | Used by |
 |---|---|---|---|
-| `eirgrid_live` | EirGrid Smart Grid Dashboard: 15-min wind, solar, demand (ALL/ROI/NI), SNSP, CO2, interconnectors, fuel mix, EirGrid's own forecasts | 1 h | gridwatch, dcwatch |
-| `eirgrid_dd` | EirGrid DD Summary Report workbook: monthly dispatch-down, causes, regional rates, farm list, each figure with its cell | 6 h | gridwatch |
-| `weather_forecasts` | Met Éireann (HARMONIE/ECMWF) and MET Norway point forecasts at 23 points | 3 h | gridwatch |
+| `eirgrid_live` | EirGrid Smart Grid Dashboard: 15-min wind, solar, demand, SNSP, CO2, interconnectors, fuel mix; EirGrid's own forecasts. Backfills 400 days on first run. | 1 h | gridwatch, dcwatch |
+| `eirgrid_dd` | EirGrid DD Summary Report workbook (monthly dispatch-down, causes, regional rates, farm list) | 6 h | gridwatch |
+| `weather_forecasts` | Met Éireann + MET Norway point forecasts at 23 points | 3 h | gridwatch |
 | `weather_obs` | Met Éireann hourly observations, 18 stations | 1 h | gridwatch |
 | `weather_warnings` | Met Éireann warnings | 1 h | gridwatch |
-| `planning_npad_dc` | Raw mirror: council planning filings mentioning a data centre (ArcGIS) | 24 h | dcwatch |
-| `acp_cases_dc` | Raw mirror: An Coimisiún Pleanála cases mentioning a data centre | 24 h | dcwatch |
-| `cso_mec02` | Raw mirror: CSO MEC02 data-centre electricity (CSV as published) | 24 h | dcwatch |
-| `etenders_opendata` | OGP eTenders open dataset: every competition since 2013 with awards (suppliers, value, bids). Normalised CSV plus the untouched original | 24 h (file changes ~quarterly) | tenderwatch |
-| `ted_ireland` | TED notices from Irish buyers: contract notices (open tenders) and award notices (winner, value, bids), from 2024 | 6 h | tenderwatch |
-| `climate_daily` | Met Éireann daily climate records, ~520 stations with decades of rain, temperature, wind, sunshine. Refreshed a chunk of stations per run | 3 h (new data monthly) | tenderwatch |
-
-The current list, with health and last success, is at `/v1/status.json`. The file list is `/v1/catalog.json`.
+| `planning_npad_dc`, `acp_cases_dc`, `cso_mec02` | Raw mirrors for DCWatch | 24 h | dcwatch |
 
 ## Published layout (`/v1/…`)
 
@@ -49,8 +62,18 @@ The current list, with health and last success, is at `/v1/status.json`. The fil
 | `tenders/etenders_notices.csv.gz`, `tenders/raw/<date>-<sha>.csv.gz` | eTenders competitions and awards, normalised; and the original file for audit |
 | `tenders/ted_notices/YYYY.csv` | TED notices from Irish buyers by publication year |
 | `climate/stations.csv`, `climate/daily/<id>.csv.gz` | Met Éireann stations and their daily records (units as published: mm, °C, knots) |
-| `ledger/YYYY-MM.csv` | Every payload: source, URL, time, SHA-256, model run |
-| `events.json` | New workbook months, warnings, records, source outages and recoveries |
+| `statistics/cso/<TABLE>.csv.gz`, `statistics/eurostat/<dataset>.csv.gz` (+ `index.csv` in each) | CSO PxStat and Eurostat tables |
+| `property/ppr/<year>.csv.gz`, `property/ppr_monthly_county.csv.gz` | Property Price Register sales (no addresses) and monthly county medians |
+| `water/opw_{stations.csv,latest.json}`, `water/opw_daily/<year>.csv`, `water/tide_daily/<year>.csv` | River/lake levels and tide gauges: stations, latest, daily min/max/mean |
+| `transport/gtfs_{agency,routes,stops}.csv.gz` | NTA public transport reference tables |
+| `governance/oireachtas_{members,bills}.csv.gz` | Oireachtas members and bills |
+| `energy_intl/gb_carbon_daily/<year>.csv`, `energy_intl/gb_generation_mix_daily/<year>.csv` | GB carbon intensity and generation mix, daily |
+| `business/cro/companies/<year>.csv.gz`, `business/cro/{registrations_monthly,recent_registrations}.csv.gz`, `business/cro/financial_statements/*.csv.gz` | CRO companies by registration year (no addresses), new-company counts, accounts filed |
+| `environment/epa/<layer>.{geojson,csv}.gz`, `environment/epa/index.csv`, `environment/epa_bathing_water_*.csv.gz` | EPA layers and bathing water |
+| `catalogue/datagovie_packages.csv.gz`, `open/index.csv`, `open/<dataset>/<file>.gz` | data.gov.ie index; mirrored Revenue, TII and Dublin counter datasets |
+| `ledger/YYYY-MM.csv` (core), `ledger/<domain>/YYYY-MM.csv` | Every payload: source, URL, time, SHA-256, model run |
+| `events.json` (core), `events/<domain>.json` | New workbook months, warnings, records, source outages and recoveries |
+| `catalog.json`, `status.json` | Merged across every domain (also `catalog/<domain>.json`, `status/<domain>.json`) |
 
 Licence: compiled data CC BY 4.0. Cite "Solas33 Data Hub" and the original publisher. Each
 publisher's own terms also apply.
@@ -83,9 +106,10 @@ its tables to `models.py` and its files to `publish.build`. Log every payload wi
 
 ```powershell
 python -m venv .venv; .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m tools.run --all --no-publish     # collect only
+python -m tools.run --all --no-publish     # collect only (core)
+.venv\Scripts\python -m tools.run --domain statistics --all --out .\out   # one domain, files into a local folder
 .venv\Scripts\python -m pytest
 ```
 
-Production runs `.github/workflows/hub.yml` hourly. It uses org secret `CF_API_TOKEN` and org
+Production runs `.github/workflows/hub.yml` hourly (core) and `.github/workflows/hub-domains.yml` every 3 hours (one job per domain). It uses org secret `CF_API_TOKEN` and org
 variable `CF_ACCOUNT_ID`, and keeps its database on the `state` branch.
