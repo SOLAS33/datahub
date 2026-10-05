@@ -35,6 +35,8 @@ def test_etenders_old_and_new_layouts_normalise_alike():
     assert new["tender_id"] == "8565893" and new["parent_id"] == "1810904" and new["awarded_value_eur"] == "30000"
     assert new["suppliers"] == "Innovation First Trading Sarl" and new["award_published"] == "2026-07-21" and new["source"] == "OpenData-DPSTenders"
     assert new["title"] == "VEX Equipment" and new["procedure"] == "DPS"
+    piped = normalise_etenders(NEW.replace("Innovation First Trading Sarl", "| Alanna Homes Ltd | Cairn Homes"))[0]
+    assert piped["suppliers"] == "Alanna Homes Ltd; Cairn Homes"
 
 
 def test_met_eireann_daily_file():

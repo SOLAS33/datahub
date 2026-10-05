@@ -126,7 +126,7 @@ def normalise_etenders(text: str) -> list[dict]:
         for c in NUM_COLS:
             row[c] = _num(row.get(c, ""))
         sup = _text(row.get("suppliers", ""))
-        row["suppliers"] = "; ".join(s.strip() for s in sup.split(";") if s.strip())
+        row["suppliers"] = "; ".join(s.strip() for s in re.split(r"[;|]", sup) if s.strip())   # the source mixes ';' and '|' as separators
         for c in ETENDERS_OUT:
             if c not in DATE_COLS and c not in NUM_COLS and c != "suppliers":
                 row[c] = _text(row.get(c, ""))
