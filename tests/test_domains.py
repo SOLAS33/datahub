@@ -167,3 +167,35 @@ def test_gtfs_reference_tables_are_read_by_name():
         z.writestr("stops.txt", "stop_id,stop_name,stop_lat,stop_lon,extra\n1,Main St,53.3,-6.2,x\n")
     rows = read_table(zipfile.ZipFile(io.BytesIO(buf.getvalue())), "stops.txt", KEEP["stops.txt"])
     assert rows == [["1", "", "Main St", "53.3", "-6.2", "", "", ""]]
+
+
+# ------------------------------------------------------------------ EPA and CRO
+
+def test_epa_flatten_turns_text_none_into_empty_and_finds_a_location():
+    from s33hub.collectors.epa import flatten_features
+    doc = {"features": [
+        {"geometry": {"type": "MultiPoint", "coordinates": [[-6.33, 53.39]]}, "properties": {"RegCD": "W0127", "Name": "Dunsink\n Landfill", "ResponsibleAuthority": "None", "Pop": 5}},
+        {"geometry": {"type": "Polygon", "coordinates": [[[-8.0, 52.0], [-7.0, 52.0], [-7.0, 53.0], [-8.0, 53.0], [-8.0, 52.0]]]}, "properties": {"RegCD": "W9", "Extra": "x"}}]}
+    cols, rows = flatten_features(doc)
+    assert cols == ["RegCD", "Name", "ResponsibleAuthority", "Pop", "Extra", "geometry_type", "lon", "lat"]
+    assert rows[0] == ["W0127", "Dunsink Landfill", "", "5", "", "MultiPoint", -6.33, 53.39]       # "None" -> empty; whitespace tidied; missing column -> empty
+    assert rows[1][-3:] == ["Polygon", -7.5, 52.5]                                                    # polygons use the centre of their bounding box
+
+
+def test_epa_layer_list_is_curated_not_everything():
+    from s33hub.collectors.epa import LAYERS
+    assert len(LAYERS) > 30 and "MON_WaterStations" in LAYERS and "IllegalWasteRiskMap" not in LAYERS and "WATER_RIVNETROUTES" not in LAYERS
+
+
+def test_cro_register_drops_addresses_and_keeps_the_routing_key():
+    from s33hub.collectors.business import normalise_cro, type_group
+    text = ("company_num,company_name,company_status_code,company_status,company_type_code,company_type,company_reg_date,last_ar_date,company_address_1,company_address_2,"
+            "company_address_3,company_address_4,comp_dissolved_date,nard,last_accounts_date,company_status_date,nace_v2_code,eircode,company_name_eff_date,company_type_eff_date,princ_object_code\n"
+            "673935,INNOVA-SHIELD LIMITED,1156,Strike Off Listed,1153,LTD - Private Company Limited by Shares,2020-07-15,,THE BLACK CHURCH,ST. MARY'S PLACE,DUBLIN 7,\"DUBLIN 7, DUBLIN\",,2021-01-15,,2026-08-31,4741.0,D07P4AX,2020-12-03,2020-07-15,\n")
+    rows = normalise_cro(text)
+    assert rows == [["673935", "INNOVA-SHIELD LIMITED", "Strike Off Listed", "1156", "LTD - Private Company Limited by Shares", "1153", "2020-07-15", "", "2026-08-31", "", "", "4741", "D07"]]
+    assert "BLACK CHURCH" not in repr(rows) and "P4AX" not in repr(rows)
+    with pytest.raises(ValueError):
+        normalise_cro("a,b\n1,2\n")
+    assert type_group("CLG - Company Limited by Guarantee") == "company limited by guarantee" and type_group("DAC - Designated Activity Company (limited by shares)") == "designated activity company"
+    assert type_group("LTD - Private Company Limited by Shares") == "private limited company" and type_group("ULC - Private Unlimited Company") == "unlimited company"

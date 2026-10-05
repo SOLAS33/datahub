@@ -23,7 +23,8 @@ The hub is **domains**, not one pile. `core` is the original hub (grid, weather,
 | core | EirGrid live and dispatch-down, Met Éireann/MET Norway forecasts, observations, warnings, planning and An Coimisiún Pleanála mirrors, CSO data-centre electricity |
 | procurement | eTenders open dataset (87k competitions, awards), TED notices from Irish buyers |
 | climate | Met Éireann daily climate records, ~520 stations |
-| environment | OPW river and lake levels, Marine Institute tide gauges (daily min/max/mean) |
+| environment | OPW river and lake levels, Marine Institute tide gauges (daily min/max/mean), EPA: 42 GeoServer layers (licensed facilities, emission points, water and air monitoring) and bathing water |
+| business | Companies Registration Office: every company (825k), new registrations by month, filed accounts |
 | statistics | 48 CSO PxStat tables, 8 Eurostat datasets |
 | property | Residential Property Price Register (no street addresses), monthly county medians |
 | transport | NTA GTFS agencies, routes, stops |
@@ -67,6 +68,8 @@ Full register with licences, cadence, tier and rights: [docs/SOURCES.md](docs/SO
 | `transport/gtfs_{agency,routes,stops}.csv.gz` | NTA public transport reference tables |
 | `governance/oireachtas_{members,bills}.csv.gz` | Oireachtas members and bills |
 | `energy_intl/gb_carbon_daily/<year>.csv`, `energy_intl/gb_generation_mix_daily/<year>.csv` | GB carbon intensity and generation mix, daily |
+| `business/cro/companies/<year>.csv.gz`, `business/cro/{registrations_monthly,recent_registrations}.csv.gz`, `business/cro/financial_statements/*.csv.gz` | CRO companies by registration year (no addresses), new-company counts, accounts filed |
+| `environment/epa/<layer>.{geojson,csv}.gz`, `environment/epa/index.csv`, `environment/epa_bathing_water_*.csv.gz` | EPA layers and bathing water |
 | `catalogue/datagovie_packages.csv.gz`, `open/index.csv`, `open/<dataset>/<file>.gz` | data.gov.ie index; mirrored Revenue, TII and Dublin counter datasets |
 | `ledger/YYYY-MM.csv` (core), `ledger/<domain>/YYYY-MM.csv` | Every payload: source, URL, time, SHA-256, model run |
 | `events.json` (core), `events/<domain>.json` | New workbook months, warnings, records, source outages and recoveries |

@@ -6,12 +6,14 @@ every other domain is a self-contained job with its own small database and its o
 from __future__ import annotations
 
 from .base import Collector, last_run, make_client, run_collector
+from .business import CroCompanies
 from .catalogue import CkanOpenDatasets, DataGovIeCatalogue
 from .climate import ClimateDaily
 from .eirgrid import EirGridLive
 from .eirgrid_dd import EirGridDispatchDown
 from .energy_intl import NesoCarbon
 from .environment import MarineTideGauges, OpwWaterLevels
+from .epa import EpaBathingWater, EpaWfsLayers
 from .governance import Oireachtas
 from .mirrors import AcpDataCentres, CsoMec02, PlanningDataCentres
 from .property import PropertyPriceRegister
@@ -26,9 +28,9 @@ REGISTRY: dict[str, Collector] = {c.key: c for c in (
     # procurement
     EtendersOpenData(), TedIreland(),
     # climate and environment
-    ClimateDaily(), OpwWaterLevels(), MarineTideGauges(),
-    # statistics, property, transport, governance, energy abroad, catalogue
-    CsoPxStat(), Eurostat(), PropertyPriceRegister(), NtaGtfs(), Oireachtas(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
+    ClimateDaily(), OpwWaterLevels(), MarineTideGauges(), EpaWfsLayers(), EpaBathingWater(),
+    # companies, statistics, property, transport, governance, energy abroad, catalogue
+    CroCompanies(), CsoPxStat(), Eurostat(), PropertyPriceRegister(), NtaGtfs(), Oireachtas(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
 
 CORE = "core"
 DOMAINS = sorted({c.domain for c in REGISTRY.values()} - {CORE})

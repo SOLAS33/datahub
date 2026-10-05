@@ -35,6 +35,14 @@ must not feed paid products until its row in the site's rights register says con
 - **`acp_cases_dc`**: Raw ArcGIS features (attributes + centroid) for appeals, SID cases and referrals mentioning a data centre.
 - **`cso_mec02`**: Quarterly metered electricity (GWh): data centres vs all other customers, 2015 onward - the CSV exactly as published.
 
+## business
+
+| Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
+|---|---|---|---|---|---|---|---|
+| `cro_companies` | [CRO company register and filed accounts](https://opendata.cro.ie/) | Companies Registration Office (CRO) | Creative Commons Attribution 4.0 | 24 h | files | open | - |
+
+- **`cro_companies`**: Every company on the Irish register (status, type, registration and dissolution dates, NACE code, Eircode routing key; no street addresses), monthly new-company counts, recent registrations, and which companies filed accounts.
+
 ## catalogue
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
@@ -67,9 +75,13 @@ must not feed paid products until its row in the site's rights register says con
 |---|---|---|---|---|---|---|---|
 | `opw_water_levels` | [OPW river and lake levels (waterlevel.ie)](https://waterlevel.ie/) | Office of Public Works (OPW) | Creative Commons Attribution 4.0 (OPW data; provisional, unvalidated) | 1 h | rows | check | - |
 | `marine_tide_gauges` | [Irish National Tide Gauge Network (Marine Institute)](https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.html) | Marine Institute | Creative Commons Attribution 4.0 | 3 h | rows | check | - |
+| `epa_wfs` | [EPA licensed facilities, emission points, water and air monitoring (GeoServer layers)](https://gis.epa.ie/) | Environmental Protection Agency (EPA) | Creative Commons Attribution 4.0 | 24 h | files | open | - |
+| `epa_bathing_water` | [EPA bathing water: locations, classifications and incidents](https://www.beaches.ie/) | Environmental Protection Agency (EPA) with local authorities (beaches.ie) | Creative Commons Attribution 4.0 | 3 h | files | open | - |
 
 - **`opw_water_levels`**: ~2,000 river, lake and tide readings across ~450 stations: station list, latest readings, and daily min/max/mean since collection began.
 - **`marine_tide_gauges`**: Real-time sea level at Irish tide gauges (m above Chart Datum and Malin Head OD): daily min/max/mean per gauge since collection began.
+- **`epa_wfs`**: 42 EPA layers as GeoJSON and flat CSV (facilities, emission points, water stations, hydrometric gauges, air sites, remedial actions...) with an index.
+- **`epa_bathing_water`**: Every designated bathing water (classification, facilities) and every pollution incident or bathing restriction announced since collection began.
 
 ## governance
 
