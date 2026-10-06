@@ -101,3 +101,14 @@ def test_names():
     assert clean_name("An Garda Siochana_1192") == "An Garda Siochana" and clean_name("Route 66") == "Route 66"
     assert NOT_A_COMPANY.search("Deloitte Ireland LLP") and not NOT_A_COMPANY.search("Alpha Build Ltd") and not NOT_A_COMPANY.search("Philips Electronics")
     assert search_key("O'Brien & Sons (Cork) Ltd.") == "obriensonscorkltd"
+
+
+def test_meta_counts_flags_coverage_and_source():
+    rows = [["100", "ACME LIMITED", "Normal", "1", "LTD", "1", "2015-03-01", "", "", "2020-03-01", "2019-06-30", "4120", "D02", "", ""],
+            ["101", "TIDY LIMITED", "Normal", "1", "LTD", "1", "2015-03-01", "", "", "2026-03-01", "2025-06-30", "", "", "", ""],
+            ["102", "GONE LIMITED", "Strike Off Listed", "1", "LTD", "1", "2015-03-01", "", "2026-09-01", "", "", "", "", "", ""]]
+    recs = risk.build_records(rows, {}, {}, TODAY)
+    m = risk.meta(recs, TODAY, {"source_register_sha256": "abc"})
+    assert m["rules"] == risk.RULES_VERSION and m["evaluated_on"] == TODAY.isoformat() and m["companies"] == 3 and m["live"] == 2
+    assert m["live_flag_counts"]["AR_OVERDUE"] == 1 and m["live_coverage"]["nace"] == 1 and m["live_coverage"]["eircode_key"] == 1
+    assert m["by_status_group"]["S"] == 1 and m["levels"]["red"] == 1 and m["source_register_sha256"] == "abc"

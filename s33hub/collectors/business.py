@@ -245,7 +245,7 @@ class CroCompanies(Collector):
             for path, data in files.items():
                 publish_table(items, path, path, data, "application/json" if path.endswith("index.json") else "application/gzip", None,
                               "Company risk records / search index (rules " + risk.RULES_VERSION + ")", self.key)
-            for path, (data, ctype) in risk.aggregates(records, utcnow().date()).items():
+            for path, (data, ctype) in risk.aggregates(records, utcnow().date(), dict(source_register_sha256=items.get("_source", {}).get("sha256"), newest_registration=items.get("_source", {}).get("newest_registration"))).items():
                 publish_table(items, path, path, data, ctype, None, "Company risk market tables", self.key)
             level = Counter(r["lv"] for r in records.values())
             risk_msg = f"; risk: {len(records):,} records ({level['red']:,} red, {level['amber']:,} amber), {len(contracts):,} with public contracts, {len(sanctions)} sanctions name matches, {len(files)} files"

@@ -166,7 +166,7 @@ def search_shards(records: dict[str, dict]) -> dict[str, bytes]:
     return out
 
 
-def aggregates(records: dict[str, dict], today: date) -> dict[str, tuple[bytes, str]]:
+def aggregates(records: dict[str, dict], today: date, extra: dict | None = None) -> dict[str, tuple[bytes, str]]:
     """Market-level tables: filing compliance by sector, status events by month, the strike-off list, recent insolvencies. {path: (bytes, type)}."""
     import csv
     import io
@@ -210,8 +210,24 @@ def aggregates(records: dict[str, dict], today: date) -> dict[str, tuple[bytes, 
         "v1/business/risk/status_events_monthly.csv.gz": (csv_gz(["month", "status_group", "companies"], [[m, g, c] for (m, g), c in sorted(ev.items())]), "application/gzip"),
         "v1/business/risk/strike_off_list.csv.gz": (csv_gz(["company_num", "name", "listed", "nace", "eircode_routing_key", "registered", "type"], sorted(strike, key=lambda r: r[2], reverse=True)), "application/gzip"),
         "v1/business/risk/recent_insolvencies.csv.gz": (csv_gz(["company_num", "name", "status", "since", "nace", "eircode_routing_key", "registered"], sorted(insolv, key=lambda r: r[3], reverse=True)), "application/gzip"),
-        "v1/business/risk/meta.json": (json.dumps({"rules": RULES_VERSION, "companies": len(records), "live": sum(1 for r in records.values() if r["sg"] == "L"),
-                                                    "thresholds": {"annual_return_overdue_months": AR_OVERDUE_MONTHS, "accounts_stale_months": ACCOUNTS_STALE_MONTHS, "late_filing_days": LATE_DAYS,
-                                                                   "new_company_months": NEW_MONTHS, "new_and_large_value_eur": NEW_AND_LARGE_VALUE}}, indent=1).encode(), "application/json"),
+        "v1/business/risk/meta.json": (json.dumps(meta(records, today, extra), indent=1).encode(), "application/json"),
     }
     return out
+
+
+def meta(records: dict[str, dict], today: date, extra: dict | None = None) -> dict:
+    """meta.json: rules version, thresholds, and the counts a reader needs to judge the data: how often each flag fires among live companies,
+    how complete the fields are, and which register file (by hash) the records were built from."""
+    live = [r for r in records.values() if r["sg"] == "L"]
+    flags: Counter = Counter()
+    for r in live:
+        for code in {f[0] for f in r["fl"]}:
+            flags[code] += 1
+    levels = Counter(r["lv"] for r in records.values())
+    cov = {"nace": sum(1 for r in live if r["nc"]), "eircode_key": sum(1 for r in live if r["ea"]), "annual_return": sum(1 for r in live if r["ar"]),
+           "accounts": sum(1 for r in live if r["ac"]), "filings_on_record": sum(1 for r in live if r["f"])}
+    return {"rules": RULES_VERSION, "evaluated_on": today.isoformat(), "companies": len(records), "live": len(live),
+            "by_status_group": dict(Counter(r["sg"] for r in records.values())), "levels": dict(levels), "live_flag_counts": dict(sorted(flags.items())),
+            "live_coverage": cov, "public_contract_matches": sum(1 for r in records.values() if r.get("pc")), "sanctions_name_matches": sum(1 for r in records.values() if r.get("sx")),
+            "thresholds": {"annual_return_overdue_months": AR_OVERDUE_MONTHS, "accounts_stale_months": ACCOUNTS_STALE_MONTHS, "late_filing_days": LATE_DAYS,
+                           "new_company_months": NEW_MONTHS, "new_and_large_value_eur": NEW_AND_LARGE_VALUE}, **(extra or {})}
