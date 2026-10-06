@@ -193,7 +193,7 @@ def test_cro_register_drops_addresses_and_keeps_the_routing_key():
             "company_address_3,company_address_4,comp_dissolved_date,nard,last_accounts_date,company_status_date,nace_v2_code,eircode,company_name_eff_date,company_type_eff_date,princ_object_code\n"
             "673935,INNOVA-SHIELD LIMITED,1156,Strike Off Listed,1153,LTD - Private Company Limited by Shares,2020-07-15,,THE BLACK CHURCH,ST. MARY'S PLACE,DUBLIN 7,\"DUBLIN 7, DUBLIN\",,2021-01-15,,2026-08-31,4741.0,D07P4AX,2020-12-03,2020-07-15,\n")
     rows = normalise_cro(text)
-    assert rows == [["673935", "INNOVA-SHIELD LIMITED", "Strike Off Listed", "1156", "LTD - Private Company Limited by Shares", "1153", "2020-07-15", "", "2026-08-31", "", "", "4741", "D07"]]
+    assert rows == [["673935", "INNOVA-SHIELD LIMITED", "Strike Off Listed", "1156", "LTD - Private Company Limited by Shares", "1153", "2020-07-15", "", "2026-08-31", "", "", "4741", "D07", "2020-12-03", "2020-07-15"]]
     assert "BLACK CHURCH" not in repr(rows) and "P4AX" not in repr(rows)
     with pytest.raises(ValueError):
         normalise_cro("a,b\n1,2\n")
