@@ -150,7 +150,8 @@ class CroCompanies(Collector):
         raw = get_with_retry(client, url, timeout=900).content
         digest = sha256(raw)
         log_fetch(session, self.key, url, digest, len(raw), self.licence)
-        companies_changed = items.get("_source", {}).get("sha256") != digest or not any("/risk/" in k for k in items)
+        # the rows are parsed on every run: risk flags depend on today's date, and the publish ledger (not this state) decides what is uploaded
+        companies_changed = True
         rows: list[list[str]] = []
         filings_by: dict[str, list[tuple[str, str]]] = {}
         if companies_changed:
@@ -220,6 +221,8 @@ class CroCompanies(Collector):
             wins = load_public_contracts(client)
             contracts = {nums[0]: dict(w) for k, w in wins.items() if (nums := names.get(k)) and len(nums) == 1}
             records = risk.build_records(rows, filings_by, contracts, utcnow().date())
+            for k in [k for k in items if "/risk/" in k]:       # a cut-off run can mark files published that never uploaded; the ledger dedups
+                del items[k]
             files = {**risk.company_shards(records), **risk.search_shards(records)}
             for path, data in files.items():
                 publish_table(items, path, path, data, "application/json" if path.endswith("index.json") else "application/gzip", None,
