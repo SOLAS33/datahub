@@ -15,7 +15,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
-RULES_VERSION = "1.0"
+RULES_VERSION = "1.1"
 AR_OVERDUE_MONTHS = 16          # annual return due within ~56 days of its date: older than 16 months is clearly overdue
 ACCOUNTS_STALE_MONTHS = 30      # period end of the latest accounts on record; typical is 12-21 months, so 30 is well beyond normal
 LATE_DAYS = 300                 # accounts received more than ~10 months after their period end
@@ -52,7 +52,7 @@ def status_group(status: str) -> str:
     return "D"
 
 
-def assess(c: dict, today: date, filings: list[tuple[str, str]] | None = None, contracts: dict | None = None) -> tuple[list[list[str]], str]:
+def assess(c: dict, today: date, filings: list[tuple[str, str]] | None = None, contracts: dict | None = None, sanctions: dict | None = None) -> tuple[list[list[str]], str]:
     """(flags, level) for one company record. A flag is [code, severity, text]."""
     flags: list[list[str]] = []
     g = c["sg"]
@@ -89,6 +89,9 @@ def assess(c: dict, today: date, filings: list[tuple[str, str]] | None = None, c
         pc = contracts or None
         if pc and age is not None and age < NEW_MONTHS and (pc.get("v") or 0) >= NEW_AND_LARGE_VALUE:
             flags.append(["NEW_AND_LARGE", "amber", f"Under a year old but has won public contracts worth about EUR {pc['v']:,.0f}"])
+    if g == "L" and sanctions:
+        flags.append(["SANCTIONS_NAME", "amber", f"Possible sanctions name match: the company's name is identical to an entity on the EU financial sanctions list ({sanctions['n']}; {sanctions['p'] or 'programme not stated'}"
+                      + (f"; designated {sanctions['d']}" if sanctions.get("d") else "") + "). A name match is not an identification: check the listed entity against this company before drawing any conclusion"])
     ne = d(c.get("ne", ""))
     if g == "L" and ne and ne > (reg or ne) and months_between(ne, today) < NAME_CHANGE_MONTHS:
         flags.append(["NAME_CHANGED", "info", f"Name changed on {c['ne']}"])
@@ -97,7 +100,7 @@ def assess(c: dict, today: date, filings: list[tuple[str, str]] | None = None, c
     return flags, level
 
 
-def build_records(rows: list[list[str]], filings: dict[str, list[tuple[str, str]]], contracts: dict[str, dict], today: date) -> dict[str, dict]:
+def build_records(rows: list[list[str]], filings: dict[str, list[tuple[str, str]]], contracts: dict[str, dict], today: date, sanctions: dict[str, dict] | None = None) -> dict[str, dict]:
     """Per-company risk records from normalised CRO rows (see business.OUT column order)."""
     out: dict[str, dict] = {}
     for r in rows:
@@ -109,8 +112,11 @@ def build_records(rows: list[list[str]], filings: dict[str, list[tuple[str, str]
         fl = sorted(filings.get(num, []), reverse=True)
         rec["f"] = [[a, b, (d(a) - d(b)).days if d(a) and d(b) else None] for a, b in fl[:6]]
         pc = contracts.get(num)
-        flags, level = assess(rec, today, fl, pc)
+        sx = (sanctions or {}).get(num)
+        flags, level = assess(rec, today, fl, pc, sx)
         rec["fl"], rec["lv"], rec["pc"] = flags, level, pc
+        if sx:
+            rec["sx"] = sx
         out[num] = rec
     return out
 

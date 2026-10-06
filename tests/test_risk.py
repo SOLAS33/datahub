@@ -1,4 +1,4 @@
-"""Company risk rules (1.0): each flag fires for the stated reason and not otherwise; shards are stable; names normalise as agreed."""
+"""Company risk rules (1.1): each flag fires for the stated reason and not otherwise; shards are stable; names normalise as agreed."""
 from __future__ import annotations
 
 import gzip

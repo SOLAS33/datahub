@@ -44,3 +44,11 @@ Exact `norm_name` match (case, punctuation and legal-form words removed; `s33hub
 ## Privacy
 
 No directors or individuals; addresses reduced to the Eircode routing key at collection.
+
+## Sanctions name match (rules 1.1)
+
+`SANCTIONS_NAME` (amber): a live company whose normalised name equals a name or alias of an *enterprise* on the EU consolidated financial sanctions list (hub file `v1/governance/sanctions/eu_enterprises.csv.gz`), when exactly one live company has that name and the normalised name is at least 6 characters. This is a name match, not an identification: many matches are coincidences (on the first run, 3 of 326,000 live companies). The record carries `sx` `{id, n, p, d}` (entity id, listed name, programme, designation date). Individuals on the list are not republished.
+
+## Planning pipeline
+
+`v1/property/planning/monthly_authority.csv.gz` (applications, grants, refusals, homes and floor area per planning authority and month) and `major_applications.csv.gz` (at least 50 homes or 5,000 m2). The national planning dataset carries no applicant names, so planning applications cannot be linked to companies; no addresses are republished.

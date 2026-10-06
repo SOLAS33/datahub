@@ -15,7 +15,7 @@ import re
 import statistics
 import zipfile
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy.orm import Session
@@ -105,4 +105,111 @@ class PropertyPriceRegister(Collector):
         items["_source"] = dict(last_modified=lm, content_length=ln, sha256=digest, sales=len(rows), newest_sale=max(r[0] for r in rows))
         res = save_state(session, self.key, state, self.url, self.name)
         res.fetched, res.message = len(rows), f"{len(rows):,} sales; {tally.message(len(by_year))}; newest {items['_source']['newest_sale']}"
+        return res
+
+
+# ---- Planning applications nationwide: the construction pipeline
+
+PLANNING_API = "https://services.arcgis.com/NzlPQPKn5QF9v2US/arcgis/rest/services/IrishPlanningApplications/FeatureServer/0/query"
+PLANNING_FIELDS = ("PlanningAuthority,ApplicationNumber,DevelopmentDescription,ApplicationStatus,ApplicationType,Decision,NumResidentialUnits,FloorArea,AreaofSite,"
+                   "ReceivedDate,DecisionDate,GrantDate,AppealDecision,LinkAppDetails,DevelopmentPostcode")
+MAJOR_UNITS, MAJOR_FLOOR_M2 = 50, 5000
+MONTHLY_OUT = ["month_received", "planning_authority", "applications", "granted", "refused", "withdrawn", "units_applied", "units_granted", "floor_area_m2_applied"]
+MAJOR_OUT = ["planning_authority", "application_number", "received", "decision_date", "status", "type", "decision", "residential_units", "floor_area_m2", "site_area_ha",
+             "eircode_routing_key", "description", "link"]
+
+
+def _day(ms) -> str:
+    try:
+        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).date().isoformat() if ms not in (None, "") else ""
+    except (ValueError, OSError, OverflowError):
+        return ""
+
+
+def _num(v) -> float:
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def outcome(decision: str, status: str) -> str:
+    t = f"{decision or ''} {status or ''}".upper()
+    if "WITHDRAW" in t:
+        return "withdrawn"
+    if "REFUS" in t:
+        return "refused"
+    if "GRANT" in t or "CONDITIONAL" in t or "UNCONDITIONAL" in t:
+        return "granted"
+    return "other"
+
+
+def summarise_planning(features: list[dict]) -> tuple[list[list], list[list]]:
+    """(monthly-by-authority rows, major-application rows). Applicant names and development addresses are never read: the national dataset
+    carries no applicant names, and a street address would identify a household. Only commercial-scale applications are listed."""
+    monthly: dict[tuple, list[float]] = defaultdict(lambda: [0, 0, 0, 0, 0.0, 0.0, 0.0])
+    major = []
+    for f in features:
+        a = f.get("attributes", {})
+        recv = _day(a.get("ReceivedDate"))
+        if not recv:
+            continue
+        auth = (a.get("PlanningAuthority") or "").strip()
+        units, floor = _num(a.get("NumResidentialUnits")), _num(a.get("FloorArea"))
+        oc = outcome(a.get("Decision"), a.get("ApplicationStatus"))
+        m = monthly[(recv[:7], auth)]
+        m[0] += 1
+        m[1] += oc == "granted"
+        m[2] += oc == "refused"
+        m[3] += oc == "withdrawn"
+        m[4] += units
+        m[5] += units if oc == "granted" else 0
+        m[6] += floor
+        if units >= MAJOR_UNITS or floor >= MAJOR_FLOOR_M2:
+            desc = re.sub(r"\s+", " ", a.get("DevelopmentDescription") or "").strip()[:300]
+            major.append([auth, str(a.get("ApplicationNumber") or "").strip(), recv, _day(a.get("DecisionDate")), (a.get("ApplicationStatus") or "").strip(), (a.get("ApplicationType") or "").strip(),
+                          (a.get("Decision") or "").strip(), int(units), round(floor), a.get("AreaofSite") or "", (a.get("DevelopmentPostcode") or "").replace(" ", "")[:3].upper(), desc,
+                          a.get("LinkAppDetails") or ""])
+    mrows = [[mo, au, int(v[0]), int(v[1]), int(v[2]), int(v[3]), int(v[4]), int(v[5]), round(v[6])] for (mo, au), v in sorted(monthly.items())]
+    return mrows, sorted(major, key=lambda r: r[2], reverse=True)
+
+
+class PlanningPipeline(Collector):
+    key = "planning_pipeline"
+    name = "Irish Planning Applications - national construction pipeline"
+    publisher = "Department of Housing, Local Government and Heritage via data.gov.ie (National Planning Application Database)"
+    url = "https://data.gov.ie/dataset/irishplanningapplications2"
+    licence = "Creative Commons Attribution (see dataset page)"
+    provides = ("Monthly planning applications, grants and refusals per planning authority with residential units and floor area; and a list of major applications "
+                f"(at least {MAJOR_UNITS} homes or {MAJOR_FLOOR_M2:,} m2). No applicant names or street addresses.")
+    used_by = ("tenderwatch", "firmwatch")
+    interval_hours = 24.0
+    domain, tier = "property", "files"
+
+    def run(self, session: Session, client: httpx.Client) -> Result:
+        state = load_state(session, self.key)
+        items = state.setdefault("items", {})
+        feats, offset = [], 0
+        while True:
+            r = get_with_retry(client, PLANNING_API, params=dict(where="1=1", outFields=PLANNING_FIELDS, returnGeometry="false", orderByFields="OBJECTID", resultOffset=offset,
+                                                                  resultRecordCount=2000, f="json"), timeout=120)
+            body = r.json()
+            if "error" in body:
+                raise RuntimeError(f"ArcGIS error: {body['error']}")
+            page = body.get("features", [])
+            feats += page
+            if not body.get("exceededTransferLimit") or not page:
+                break
+            offset += len(page)
+        if len(feats) < 100_000:
+            raise ValueError(f"planning dataset looks wrong: {len(feats)} applications")
+        log_fetch(session, self.key, PLANNING_API, sha256(str(len(feats)).encode()), len(feats), self.licence, note=f"{len(feats)} features")
+        monthly, major = summarise_planning(feats)
+        publish_table(items, "monthly", "v1/property/planning/monthly_authority.csv.gz", gz(csv_bytes(MONTHLY_OUT, monthly)), "application/gzip", len(monthly),
+                      "Planning applications per month and authority: counts, outcomes, homes, floor area", self.key)
+        publish_table(items, "major", "v1/property/planning/major_applications.csv.gz", gz(csv_bytes(MAJOR_OUT, major)), "application/gzip", len(major),
+                      f"Major planning applications (>= {MAJOR_UNITS} homes or {MAJOR_FLOOR_M2} m2)", self.key)
+        items["_source"] = dict(applications=len(feats), newest_received=max((m[0] for m in monthly), default=""))
+        res = save_state(session, self.key, state, self.url, self.name)
+        res.fetched, res.message = len(feats), f"{len(feats):,} applications; {len(monthly):,} month/authority rows; {len(major):,} major applications"
         return res
