@@ -77,6 +77,22 @@ def normalise_cro(text: str) -> list[list[str]]:
     return out
 
 
+def load_sanctions(client: httpx.Client) -> dict[str, dict]:
+    """EU-sanctioned enterprises per normalised name, from the hub's own published file. {} if it is not on the hub yet.
+    Names shorter than 6 characters once normalised are ignored: they would match unrelated companies."""
+    out: dict[str, dict] = {}
+    try:
+        r = client.get(f"{PUBLIC_BASE}/v1/governance/sanctions/eu_enterprises.csv.gz", timeout=120)
+        r.raise_for_status()
+        for row in csv.DictReader(io.StringIO(gzip.decompress(r.content).decode("utf-8"))):
+            k = norm_name(row["name"])
+            if len(k) >= 6 and not NOT_A_COMPANY.search(row["name"]):
+                out.setdefault(k, {"id": row["entity_id"], "n": row["name"], "p": row["programme"], "d": row["designated"]})
+    except Exception:  # noqa: BLE001 - screening is an extra: the register and risk flags still publish without it
+        return {}
+    return out
+
+
 def load_public_contracts(client: httpx.Client) -> dict[str, dict]:
     """Public-contract wins per normalised winner name, from the hub's own published procurement files (eTenders and TED).
     Returns {} if those files are not on the hub yet: the risk records simply carry no contract information."""
@@ -220,7 +236,9 @@ class CroCompanies(Collector):
                     names.setdefault(norm_name(r[1]), []).append(r[0])
             wins = load_public_contracts(client)
             contracts = {nums[0]: dict(w) for k, w in wins.items() if (nums := names.get(k)) and len(nums) == 1}
-            records = risk.build_records(rows, filings_by, contracts, utcnow().date())
+            screen = load_sanctions(client)
+            sanctions = {nums[0]: dict(screen[k]) for k, nums in names.items() if k in screen and len(nums) == 1}
+            records = risk.build_records(rows, filings_by, contracts, utcnow().date(), sanctions)
             for k in [k for k in items if "/risk/" in k]:       # a cut-off run can mark files published that never uploaded; the ledger dedups
                 del items[k]
             files = {**risk.company_shards(records), **risk.search_shards(records)}
@@ -230,7 +248,7 @@ class CroCompanies(Collector):
             for path, (data, ctype) in risk.aggregates(records, utcnow().date()).items():
                 publish_table(items, path, path, data, ctype, None, "Company risk market tables", self.key)
             level = Counter(r["lv"] for r in records.values())
-            risk_msg = f"; risk: {len(records):,} records ({level['red']:,} red, {level['amber']:,} amber), {len(contracts):,} with public contracts, {len(files)} files"
+            risk_msg = f"; risk: {len(records):,} records ({level['red']:,} red, {level['amber']:,} amber), {len(contracts):,} with public contracts, {len(sanctions)} sanctions name matches, {len(files)} files"
         res = save_state(session, self.key, state, self.url, self.name)
         src = items.get("_source", {})
         res.fetched, res.message = src.get("companies", 0), f"{src.get('companies', 0):,} companies (newest registered {src.get('newest_registration')}); " + \

@@ -14,9 +14,9 @@ from .eirgrid_dd import EirGridDispatchDown
 from .energy_intl import NesoCarbon
 from .environment import MarineTideGauges, OpwWaterLevels
 from .epa import EpaBathingWater, EpaWfsLayers
-from .governance import Oireachtas
+from .governance import EuSanctions, Oireachtas
 from .mirrors import AcpDataCentres, CsoMec02, PlanningDataCentres
-from .property import PropertyPriceRegister
+from .property import PlanningPipeline, PropertyPriceRegister
 from .statistics import CsoPxStat, Eurostat
 from .tenders import EtendersOpenData, TedIreland
 from .transport import NtaGtfs
@@ -30,7 +30,7 @@ REGISTRY: dict[str, Collector] = {c.key: c for c in (
     # climate and environment
     ClimateDaily(), OpwWaterLevels(), MarineTideGauges(), EpaWfsLayers(), EpaBathingWater(),
     # companies, statistics, property, transport, governance, energy abroad, catalogue
-    CroCompanies(), CsoPxStat(), Eurostat(), PropertyPriceRegister(), NtaGtfs(), Oireachtas(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
+    CroCompanies(), CsoPxStat(), Eurostat(), PropertyPriceRegister(), PlanningPipeline(), NtaGtfs(), Oireachtas(), EuSanctions(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
 
 CORE = "core"
 DOMAINS = sorted({c.domain for c in REGISTRY.values()} - {CORE})

@@ -80,3 +80,66 @@ class Oireachtas(Collector):
         res = save_state(session, self.key, state, self.url, self.name)
         res.fetched, res.message = len(members) + len(bills), f"{len(members)} members, {len(bills)} bills"
         return res
+
+
+# ---- EU consolidated financial sanctions list (enterprises only)
+
+SANCTIONS_URL = "https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw"   # the Commission's public read token
+SANCTIONS_OUT = ["entity_id", "name", "designated", "programme", "country", "regulation_url"]
+
+
+def normalise_sanctions(text: str) -> list[list[str]]:
+    """One row per name (the primary name and every alias) of each *enterprise* on the EU list. Individuals are left out: the hub's company
+    users screen companies, and the list's personal details (birth dates, passports) are not needed and not republished."""
+    import csv
+    import io
+    rd = csv.DictReader(io.StringIO(text, newline=""), delimiter=";")
+    meta: dict[str, dict] = {}
+    names: dict[str, set[str]] = {}
+    for r in rd:
+        if (r.get("Entity_SubjectType_ClassificationCode") or "").strip().lower() != "enterprise":
+            continue
+        eid = (r.get("Entity_LogicalId") or "").strip()
+        if not eid:
+            continue
+        m = meta.setdefault(eid, dict(designated=(r.get("Entity_DesignationDate") or "")[:10], programme=(r.get("Entity_Regulation_Programme") or "").strip(),
+                                      country="", url=(r.get("Entity_Regulation_PublicationUrl") or "").strip()))
+        if not m["country"]:
+            m["country"] = (r.get("Address_CountryIso2Code") or "").strip()
+        n = re.sub(r"\s+", " ", (r.get("NameAlias_WholeName") or "")).strip()
+        if n:
+            names.setdefault(eid, set()).add(n)
+    out = []
+    for eid, ns in sorted(names.items()):
+        m = meta[eid]
+        for n in sorted(ns):
+            out.append([eid, n, m["designated"], m["programme"], m["country"], m["url"]])
+    return out
+
+
+class EuSanctions(Collector):
+    key = "sanctions_eu"
+    name = "EU consolidated list of financial sanctions - enterprises"
+    publisher = "European Commission (DG FISMA), Financial Sanctions Files"
+    url = "https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions"
+    licence = "Commission reuse policy (CC BY 4.0)"
+    provides = "Every enterprise on the EU financial sanctions list, one row per name and alias: entity id, name, designation date, programme, country, regulation link. Individuals are not republished."
+    used_by = ("firmwatch",)
+    interval_hours = 24.0
+    domain, tier = "governance", "files"
+
+    def run(self, session: Session, client: httpx.Client) -> Result:
+        state = load_state(session, self.key)
+        items = state.setdefault("items", {})
+        r = get_with_retry(client, SANCTIONS_URL, timeout=600)
+        digest = sha256(r.content)
+        log_fetch(session, self.key, SANCTIONS_URL.split("?")[0], digest, len(r.content), self.licence)
+        rows = normalise_sanctions(r.content.decode("utf-8-sig", "replace"))
+        if len(rows) < 500:
+            raise ValueError(f"EU sanctions list looks wrong: {len(rows)} enterprise names")
+        publish_table(items, "enterprises", "v1/governance/sanctions/eu_enterprises.csv.gz", gz(csv_bytes(SANCTIONS_OUT, rows)), "application/gzip", len(rows),
+                      "EU sanctioned enterprises: one row per name and alias", self.key)
+        items["_source"] = dict(sha256=digest, names=len(rows), entities=len({x[0] for x in rows}))
+        res = save_state(session, self.key, state, self.url, self.name)
+        res.fetched, res.message = len(rows), f"{items['_source']['entities']:,} enterprises, {len(rows):,} names"
+        return res
