@@ -150,7 +150,7 @@ class CroCompanies(Collector):
         raw = get_with_retry(client, url, timeout=900).content
         digest = sha256(raw)
         log_fetch(session, self.key, url, digest, len(raw), self.licence)
-        companies_changed = items.get("_source", {}).get("sha256") != digest
+        companies_changed = items.get("_source", {}).get("sha256") != digest or not any("/risk/" in k for k in items)
         rows: list[list[str]] = []
         filings_by: dict[str, list[tuple[str, str]]] = {}
         if companies_changed:
