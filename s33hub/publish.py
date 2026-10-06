@@ -309,7 +309,7 @@ def publish(session: Session, uploader: Uploader, months_back: int | None = 2, i
         if path in prev and prev[path].sha256 == digest:
             skipped += 1
             continue
-        live = path.endswith(("latest.json", "latest.csv", "status.json", "events.json", "forecast_latest.csv", "warnings.json")) or "/status/" in path or "/events/" in path or \
+        live = path.endswith(("latest.json", "latest.csv", "status.json", "events.json", "forecast_latest.csv", "warnings.json", "risk/meta.json")) or "/status/" in path or "/events/" in path or \
             path.split("/")[-1][:7] == utcnow().strftime("%Y-%m")
         pending.append((path, f["data"], f["type"] + ("; charset=utf-8" if f["type"].startswith("text") else ""), "public, max-age=300" if live else "public, max-age=86400", digest))
     uploaded = 0
