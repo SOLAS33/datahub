@@ -65,11 +65,17 @@ def test_water_match_keeps_infrastructure_and_drops_single_home_systems():
     assert "pumping station" in water_match("Construction of a wastewater pumping station and associated rising main")
     assert water_match("Extension of the Ballymore wastewater treatment plant")
     assert water_match("New 5 million litre service reservoir and watermain")
+    assert water_match("Upgrade of Kilcock sewerage scheme including new pumping station")
     assert water_match("Install a septic tank and percolation area for a new dwelling") == ""
     assert water_match("Domestic wastewater treatment system and percolation area") == ""
     assert water_match("Dwelling house with a borehole for private water supply") == ""
-    assert water_match("Permission for 40 homes with surface water attenuation tank") == ""          # weak term, but it is a housing scheme
+    assert water_match("Permission for the construction of a detached 4 bedroom house, vehicular entrance, waste water treatment system and all site works") == ""
+    assert water_match("Permission to construct dwelling house and connect to the public sewer and watermain") == ""
+    assert water_match("Permission for 40 homes with surface water attenuation tank") == ""
     assert water_match("Boreholes for groundwater abstraction for industrial use")
+    assert water_match("Group water scheme new treatment plant at Lough Cuilin")
+    assert water_match("Dwelling and waste water treatment plant") == ""
+    assert water_match("Construction of 188 dwellinghouses and a foul pumping station")
 
 
 def test_planning_summary_lists_water_applications_without_addresses():
