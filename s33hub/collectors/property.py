@@ -120,22 +120,26 @@ MAJOR_OUT = ["planning_authority", "application_number", "received", "decision_d
 
 
 WATER_OUT = ["planning_authority", "application_number", "received", "decision_date", "status", "type", "decision", "description", "matched", "link"]
-_STRONG = re.compile(r"water treatment|waste ?water treatment|sewage treatment|pumping station|reservoir|water ?main\b|trunk main|\bsewer|group water scheme|water supply scheme|desalinat|water tower|water storage|storm ?water (?:storage|treatment)", re.I)
-_WEAK = re.compile(r"borehole|abstraction|storm ?water|attenuation|water supply", re.I)
-_HOUSE = re.compile(r"dwelling|house|bungalow|domestic|extension|garage|farmyard|shed|homes|apartment|residential", re.I)
-_SEPTIC = re.compile(r"septic|percolation|domestic waste ?water|dwwts|proprietary (?:waste ?water )?treatment", re.I)
+# Terms that mean public-scale water infrastructure, kept even when the application also mentions homes (a housing estate with a pumping station is relevant).
+_PUBLIC = re.compile(r"pumping station|pump station|reservoir|trunk main|rising main|group water scheme|water supply scheme|desalinat|water tower|waterworks|water works", re.I)
+# Treatment and storage terms. In planning text these usually describe one home's own system, so they count only when the description mentions no home.
+_TREAT = re.compile(r"(?:water|waste ?water|sewage|effluent) treatment (?:plant|works|facilit\w+)|treatment plant|sewerage|sewage works|storm ?water (?:storage|treatment|tank)|water storage (?:tank|reservoir|facilit\w+)", re.I)
+_SOFT = re.compile(r"water ?main\b|\bsewer\b|abstraction|borehole", re.I)         # a house application often connects to a main or sewer
+_HOUSE = re.compile(r"dwelling|house|bungalow|domestic|garage|farmyard|shed|homes|apartment|residential|cottage|chalet|mobile home|holiday|granny", re.I)
+_SEPTIC = re.compile(r"septic|percolation|domestic waste ?water|dwwts|proprietary (?:waste ?water )?treatment|packaged (?:waste ?water )?treatment|polishing filter|wastewater treatment system", re.I)
 
 
 def water_match(desc: str) -> str:
-    """Terms that make an application relevant to water infrastructure, or ''. Individual septic tanks, domestic treatment systems and household
-    boreholes are left out: they are about one home, not about water or wastewater infrastructure."""
-    if _SEPTIC.search(desc):
+    """Terms that make an application relevant to water infrastructure, or ''. Single-home systems (septic tanks, domestic treatment plants,
+    boreholes) and houses that merely connect to a main or sewer are left out: they are about one home, not about water or wastewater infrastructure.
+    Housing developments that include their own treatment plant are left out too; the planning authority's file is the record for those."""
+    public = sorted({m.group(0).lower() for m in _PUBLIC.finditer(desc)})
+    if public:
+        return "; ".join(public)
+    if _SEPTIC.search(desc) or _HOUSE.search(desc):
         return ""
-    strong = sorted({m.group(0).lower() for m in _STRONG.finditer(desc)})
-    if strong:
-        return "; ".join(strong)
-    weak = sorted({m.group(0).lower() for m in _WEAK.finditer(desc)})
-    return "; ".join(weak) if weak and not _HOUSE.search(desc) else ""
+    found = sorted({m.group(0).lower() for m in list(_TREAT.finditer(desc)) + list(_SOFT.finditer(desc))})
+    return "; ".join(found)
 
 
 def _day(ms) -> str:
