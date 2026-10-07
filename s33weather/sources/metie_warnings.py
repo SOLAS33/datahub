@@ -17,7 +17,8 @@ from ..models import Fetch, Provenance, Warning, sha256, utcnow
 KEY = "metie_warnings"
 PUBLISHER = "Met Éireann"
 LICENCE = "CC BY 4.0 - Met Éireann (attribution required)"
-URL = "https://www.met.ie/Open_Data/json/warning_IRELAND.json"
+URL = "https://www.met.ie/warningsxml/rss.xml"          # the documented RSS feed; each item links to a CAP file. The older JSON file returns 404 (checked 2026-10-06).
+JSON_URL = "https://www.met.ie/Open_Data/json/warning_IRELAND.json"   # kept for parse() and its tests
 LANDING = "https://www.met.ie/warnings"
 
 # FIPS 10-4 county codes, which the warning feed uses. A code not listed here is shown as-is
@@ -58,8 +59,46 @@ def parse(raw: bytes) -> list[Warning]:
     return out
 
 
+CAP = "{urn:oasis:names:tc:emergency:cap:1.2}"
+LEVELS = {"moderate": "yellow", "severe": "orange", "extreme": "red", "minor": "yellow"}
+
+
+def rss_links(raw: bytes) -> list[str]:
+    """CAP file links from the warnings RSS feed. An empty list means the feed was read and no warning is in force."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(raw)
+    if root.tag != "rss":
+        raise ValueError(f"unexpected warnings feed root element: {root.tag}")
+    return [(i.findtext("link") or "").strip() for i in root.iter("item") if (i.findtext("link") or "").strip()]
+
+
+def parse_cap(raw: bytes) -> list[Warning]:
+    import xml.etree.ElementTree as ET
+    a = ET.fromstring(raw)
+    if a.tag != CAP + "alert":
+        raise ValueError(f"unexpected CAP root element: {a.tag}")
+    ident, sent, status = (a.findtext(CAP + "identifier") or "").strip(), a.findtext(CAP + "sent"), a.findtext(CAP + "status")
+    out = []
+    for info in a.findall(CAP + "info"):
+        if (info.findtext(CAP + "language") or "en").lower()[:2] != "en":
+            continue
+        params = {(p.findtext(CAP + "valueName") or ""): (p.findtext(CAP + "value") or "") for p in info.findall(CAP + "parameter")}
+        level = next((x.strip().lower() for x in params.get("awareness_level", "").split(";") if x.strip().lower() in ("yellow", "orange", "red")), "") or LEVELS.get((info.findtext(CAP + "severity") or "").lower(), "")
+        areas = [x for ar in info.findall(CAP + "area") for x in [(ar.findtext(CAP + "areaDesc") or "").strip()] if x]
+        out.append(Warning(id=ident, source=KEY, level=level, type=(info.findtext(CAP + "event") or "").strip(), headline=(info.findtext(CAP + "headline") or "").strip(),
+                           description=(info.findtext(CAP + "description") or "").strip(), regions=areas, onset=_t(info.findtext(CAP + "onset")), expiry=_t(info.findtext(CAP + "expires")),
+                           issued=_t(sent), updated=_t(info.findtext(CAP + "effective") or sent), status=status, raw={"identifier": ident, "parameters": params}))
+    return out
+
+
 def fetch(client: httpx.Client) -> Fetch:
+    """Read the RSS feed, then each CAP file it lists. Any failure raises, so an unreadable feed is never reported as "no warnings"."""
     r = get(client, URL)
-    prov = Provenance(source=KEY, publisher=PUBLISHER, url=URL, licence=LICENCE, retrieved_at=utcnow(),
-                      sha256=sha256(r.content), bytes=len(r.content))
-    return Fetch(records=parse(r.content), provenance=prov)
+    links = rss_links(r.content)
+    body, records = bytearray(r.content), []
+    for link in links:
+        c = get(client, link)
+        body += c.content
+        records += parse_cap(c.content)
+    prov = Provenance(source=KEY, publisher=PUBLISHER, url=URL, licence=LICENCE, retrieved_at=utcnow(), sha256=sha256(bytes(body)), bytes=len(body))
+    return Fetch(records=records, provenance=prov)
