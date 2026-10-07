@@ -40,7 +40,7 @@ def test_planning_summary_counts_and_lists_only_major_applications_without_addre
     feats = [feat(), feat(ApplicationNumber="A/2", Decision="REFUSED"),
              feat(ApplicationNumber="A/3", DevelopmentDescription="  Large  residential\n scheme ", NumResidentialUnits=MAJOR_UNITS + 10, FloorArea=9000, DevelopmentAddress="12 Real Street"),
              feat(ReceivedDate=None)]
-    monthly, major = summarise_planning(feats)
+    monthly, major, water = summarise_planning(feats)
     assert monthly == [["2025-01", "Cork City Council", 3, 2, 1, 0, 62, 61, 9080]]
     assert len(major) == 1 and major[0][1] == "A/3" and major[0][11] == "Large residential scheme" and major[0][10] == "T12"
     assert "Real Street" not in " ".join(str(x) for x in major[0])

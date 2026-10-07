@@ -18,6 +18,7 @@ from .governance import EuSanctions, Oireachtas
 from .mirrors import AcpDataCentres, CsoMec02, PlanningDataCentres
 from .property import PlanningPipeline, PropertyPriceRegister
 from .statistics import CsoPxStat, Eurostat
+from .water import UisceEireannAssets, UisceEireannTariffs
 from .tenders import EtendersOpenData, TedIreland
 from .transport import NtaGtfs
 from .weather import WeatherForecasts, WeatherObservations, WeatherWarnings
@@ -28,7 +29,7 @@ REGISTRY: dict[str, Collector] = {c.key: c for c in (
     # procurement
     EtendersOpenData(), TedIreland(),
     # climate and environment
-    ClimateDaily(), OpwWaterLevels(), MarineTideGauges(), EpaWfsLayers(), EpaBathingWater(),
+    ClimateDaily(), OpwWaterLevels(), MarineTideGauges(), EpaWfsLayers(), EpaBathingWater(), UisceEireannAssets(), UisceEireannTariffs(),
     # companies, statistics, property, transport, governance, energy abroad, catalogue
     CroCompanies(), CsoPxStat(), Eurostat(), PropertyPriceRegister(), PlanningPipeline(), NtaGtfs(), Oireachtas(), EuSanctions(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
 

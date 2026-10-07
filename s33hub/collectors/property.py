@@ -119,6 +119,25 @@ MAJOR_OUT = ["planning_authority", "application_number", "received", "decision_d
              "eircode_routing_key", "description", "link"]
 
 
+WATER_OUT = ["planning_authority", "application_number", "received", "decision_date", "status", "type", "decision", "description", "matched", "link"]
+_STRONG = re.compile(r"water treatment|waste ?water treatment|sewage treatment|pumping station|reservoir|water ?main\b|trunk main|\bsewer|group water scheme|water supply scheme|desalinat|water tower|water storage|storm ?water (?:storage|treatment)", re.I)
+_WEAK = re.compile(r"borehole|abstraction|storm ?water|attenuation|water supply", re.I)
+_HOUSE = re.compile(r"dwelling|house|bungalow|domestic|extension|garage|farmyard|shed|homes|apartment|residential", re.I)
+_SEPTIC = re.compile(r"septic|percolation|domestic waste ?water|dwwts|proprietary (?:waste ?water )?treatment", re.I)
+
+
+def water_match(desc: str) -> str:
+    """Terms that make an application relevant to water infrastructure, or ''. Individual septic tanks, domestic treatment systems and household
+    boreholes are left out: they are about one home, not about water or wastewater infrastructure."""
+    if _SEPTIC.search(desc):
+        return ""
+    strong = sorted({m.group(0).lower() for m in _STRONG.finditer(desc)})
+    if strong:
+        return "; ".join(strong)
+    weak = sorted({m.group(0).lower() for m in _WEAK.finditer(desc)})
+    return "; ".join(weak) if weak and not _HOUSE.search(desc) else ""
+
+
 def _day(ms) -> str:
     try:
         return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc).date().isoformat() if ms not in (None, "") else ""
@@ -144,11 +163,11 @@ def outcome(decision: str, status: str) -> str:
     return "other"
 
 
-def summarise_planning(features: list[dict]) -> tuple[list[list], list[list]]:
+def summarise_planning(features: list[dict]) -> tuple[list[list], list[list], list[list]]:
     """(monthly-by-authority rows, major-application rows). Applicant names and development addresses are never read: the national dataset
     carries no applicant names, and a street address would identify a household. Only commercial-scale applications are listed."""
     monthly: dict[tuple, list[float]] = defaultdict(lambda: [0, 0, 0, 0, 0.0, 0.0, 0.0])
-    major = []
+    major, water = [], []
     for f in features:
         a = f.get("attributes", {})
         recv = _day(a.get("ReceivedDate"))
@@ -165,13 +184,18 @@ def summarise_planning(features: list[dict]) -> tuple[list[list], list[list]]:
         m[4] += units
         m[5] += units if oc == "granted" else 0
         m[6] += floor
+        desc_all = re.sub(r"\s+", " ", a.get("DevelopmentDescription") or "").strip()
+        wm = water_match(desc_all)
+        if wm:
+            water.append([auth, str(a.get("ApplicationNumber") or "").strip(), recv, _day(a.get("DecisionDate")), (a.get("ApplicationStatus") or "").strip(), (a.get("ApplicationType") or "").strip(),
+                          (a.get("Decision") or "").strip(), desc_all[:300], wm, a.get("LinkAppDetails") or ""])
         if units >= MAJOR_UNITS or floor >= MAJOR_FLOOR_M2:
             desc = re.sub(r"\s+", " ", a.get("DevelopmentDescription") or "").strip()[:300]
             major.append([auth, str(a.get("ApplicationNumber") or "").strip(), recv, _day(a.get("DecisionDate")), (a.get("ApplicationStatus") or "").strip(), (a.get("ApplicationType") or "").strip(),
                           (a.get("Decision") or "").strip(), int(units), round(floor), a.get("AreaofSite") or "", (a.get("DevelopmentPostcode") or "").replace(" ", "")[:3].upper(), desc,
                           a.get("LinkAppDetails") or ""])
     mrows = [[mo, au, int(v[0]), int(v[1]), int(v[2]), int(v[3]), int(v[4]), int(v[5]), round(v[6])] for (mo, au), v in sorted(monthly.items())]
-    return mrows, sorted(major, key=lambda r: r[2], reverse=True)
+    return mrows, sorted(major, key=lambda r: r[2], reverse=True), sorted(water, key=lambda r: r[2], reverse=True)
 
 
 class PlanningPipeline(Collector):
@@ -181,8 +205,8 @@ class PlanningPipeline(Collector):
     url = "https://data.gov.ie/dataset/irishplanningapplications2"
     licence = "Creative Commons Attribution (see dataset page)"
     provides = ("Monthly planning applications, grants and refusals per planning authority with residential units and floor area; and a list of major applications "
-                f"(at least {MAJOR_UNITS} homes or {MAJOR_FLOOR_M2:,} m2). No applicant names or street addresses.")
-    used_by = ("tenderwatch", "firmwatch")
+                f"(at least {MAJOR_UNITS} homes or {MAJOR_FLOOR_M2:,} m2), and a list of applications about water or wastewater infrastructure. No applicant names or street addresses.")
+    used_by = ("tenderwatch", "firmwatch", "waterwatch")
     interval_hours = 24.0
     domain, tier = "property", "files"
 
@@ -204,12 +228,14 @@ class PlanningPipeline(Collector):
         if len(feats) < 100_000:
             raise ValueError(f"planning dataset looks wrong: {len(feats)} applications")
         log_fetch(session, self.key, PLANNING_API, sha256(str(len(feats)).encode()), len(feats), self.licence, note=f"{len(feats)} features")
-        monthly, major = summarise_planning(feats)
+        monthly, major, water = summarise_planning(feats)
         publish_table(items, "monthly", "v1/property/planning/monthly_authority.csv.gz", gz(csv_bytes(MONTHLY_OUT, monthly)), "application/gzip", len(monthly),
                       "Planning applications per month and authority: counts, outcomes, homes, floor area", self.key)
         publish_table(items, "major", "v1/property/planning/major_applications.csv.gz", gz(csv_bytes(MAJOR_OUT, major)), "application/gzip", len(major),
                       f"Major planning applications (>= {MAJOR_UNITS} homes or {MAJOR_FLOOR_M2} m2)", self.key)
+        publish_table(items, "water", "v1/property/planning/water_related.csv.gz", gz(csv_bytes(WATER_OUT, water)), "application/gzip", len(water),
+                      "Planning applications about water or wastewater infrastructure (no individual septic tanks or household wells)", self.key)
         items["_source"] = dict(applications=len(feats), newest_received=max((m[0] for m in monthly), default=""))
         res = save_state(session, self.key, state, self.url, self.name)
-        res.fetched, res.message = len(feats), f"{len(feats):,} applications; {len(monthly):,} month/authority rows; {len(major):,} major applications"
+        res.fetched, res.message = len(feats), f"{len(feats):,} applications; {len(monthly):,} month/authority rows; {len(major):,} major applications; {len(water):,} water-related"
         return res
