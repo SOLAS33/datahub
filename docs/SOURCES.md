@@ -77,19 +77,25 @@ must not feed paid products until its row in the site's rights register says con
 | `marine_tide_gauges` | [Irish National Tide Gauge Network (Marine Institute)](https://erddap.marine.ie/erddap/tabledap/IrishNationalTideGaugeNetwork.html) | Marine Institute | Creative Commons Attribution 4.0 | 3 h | rows | check | - |
 | `epa_wfs` | [EPA licensed facilities, emission points, water and air monitoring (GeoServer layers)](https://gis.epa.ie/) | Environmental Protection Agency (EPA) | Creative Commons Attribution 4.0 | 24 h | files | open | - |
 | `epa_bathing_water` | [EPA bathing water: locations, classifications and incidents](https://www.beaches.ie/) | Environmental Protection Agency (EPA) with local authorities (beaches.ie) | Creative Commons Attribution 4.0 | 3 h | files | open | - |
+| `ue_water_assets` | [Uisce Éireann water supply zones and asset lists](https://water.ie/open-data) | Uisce Éireann | Creative Commons Attribution 4.0 (Copyright Uisce Éireann; source water.ie; see the attribution statements on the open data page) | 168 h | files | open | waterwatch |
+| `ue_tariffs` | [Uisce Éireann business water and wastewater charges](https://www.water.ie/business/billing/charges/) | Uisce Éireann | Published tariff figures from the Uisce Éireann business charges page; check the page for the authority. Attribution: Uisce Éireann, water.ie | 24 h | files | check | waterwatch |
 
 - **`opw_water_levels`**: ~2,000 river, lake and tide readings across ~450 stations: station list, latest readings, and daily min/max/mean since collection began.
 - **`marine_tide_gauges`**: Real-time sea level at Irish tide gauges (m above Chart Datum and Malin Head OD): daily min/max/mean per gauge since collection began.
 - **`epa_wfs`**: 42 EPA layers as GeoJSON and flat CSV (facilities, emission points, water stations, hydrometric gauges, air sites, remedial actions...) with an index.
 - **`epa_bathing_water`**: Every designated bathing water (classification, facilities) and every pollution incident or bathing restriction announced since collection began.
+- **`ue_water_assets`**: Public water supply zones with population, district metered areas, water treatment plants, pumping stations, water storage (names only), wastewater treatment plants with capacity, and wastewater agglomerations. Converted from Excel to CSV.
+- **`ue_tariffs`**: Metered (bands 1 to 5) and unmetered (bands 1 to 2) non-domestic tariffs for each published charging period, checked so combined = water + wastewater.
 
 ## governance
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
 |---|---|---|---|---|---|---|---|
 | `oireachtas` | [Oireachtas open data: members and bills](https://data.oireachtas.ie/) | Houses of the Oireachtas | Oireachtas open data licence (compatible with CC BY 4.0) | 24 h | files | check | - |
+| `sanctions_eu` | [EU consolidated list of financial sanctions - enterprises](https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions) | European Commission (DG FISMA), Financial Sanctions Files | Commission reuse policy (CC BY 4.0) | 24 h | files | open | firmwatch |
 
 - **`oireachtas`**: Current members of the Dáil and Seanad (party, constituency) and every bill (title, status, stage, sponsor, origin house).
+- **`sanctions_eu`**: Every enterprise on the EU financial sanctions list, one row per name and alias: entity id, name, designation date, programme, country, regulation link. Individuals are not republished.
 
 ## procurement
 
@@ -106,8 +112,10 @@ must not feed paid products until its row in the site's rights register says con
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
 |---|---|---|---|---|---|---|---|
 | `property_price_register` | [Residential Property Price Register](https://www.propertypriceregister.ie/) | Property Services Regulatory Authority (PSRA) | Creative Commons Attribution 4.0 | 24 h | files | open | - |
+| `planning_pipeline` | [Irish Planning Applications - national construction pipeline](https://data.gov.ie/dataset/irishplanningapplications2) | Department of Housing, Local Government and Heritage via data.gov.ie (National Planning Application Database) | Creative Commons Attribution (see dataset page) | 24 h | files | open | tenderwatch, firmwatch, waterwatch |
 
 - **`property_price_register`**: Every residential sale since 2010: date, county, Eircode routing key, price, market-price and VAT flags, type, size band. One file per year, plus monthly county medians. No street addresses.
+- **`planning_pipeline`**: Monthly planning applications, grants and refusals per planning authority with residential units and floor area; and a list of major applications (at least 50 homes or 5,000 m2), and a list of applications about water or wastewater infrastructure. No applicant names or street addresses.
 
 ## statistics
 
