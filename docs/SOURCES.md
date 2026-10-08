@@ -117,6 +117,22 @@ must not feed paid products until its row in the site's rights register says con
 - **`oireachtas`**: Current members of the Dáil and Seanad (party, constituency) and every bill (title, status, stage, sponsor, origin house).
 - **`sanctions_eu`**: Every enterprise on the EU financial sanctions list, one row per name and alias: entity id, name, designation date, programme, country, regulation link. Individuals are not republished.
 
+## housing
+
+| Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
+|---|---|---|---|---|---|---|---|
+| `rtb_rents` | [RTB Average Monthly Rent Report (CSO table RIH02)](https://data.cso.ie/table/RIH02) | Residential Tenancies Board, published by the Central Statistics Office | Creative Commons Attribution 4.0 (CSO) | 168 h | files | open | propertywatch |
+| `cbi_mortgage_rates` | [Central Bank of Ireland retail interest rates: mortgages (B.3.1)](https://opendata.centralbank.ie/dataset/retail-interest-rates-mortgage-rates) | Central Bank of Ireland | Central Bank of Ireland open data (check the dataset page for the licence); attribute the Central Bank | 168 h | files | check | propertywatch |
+| `dhlgh_commencements` | [Department of Housing: residential commencement notices by local authority](https://opendata.housing.gov.ie/dataset/residential-commencement-notices) | Department of Housing, Local Government and Heritage | Creative Commons Attribution 4.0 (Department of Housing open data) | 72 h | files | open | propertywatch |
+| `homelessness_reports` | [Department of Housing monthly homelessness reports](https://data.gov.ie/organization/department-of-housing-local-government-and-heritage) | Department of Housing, Local Government and Heritage | Creative Commons Attribution 4.0 (Department of Housing open data) | 72 h | files | open | propertywatch |
+| `housing_grants` | [Housing grants and supports: official page scraper and change monitor](https://www.citizensinformation.ie/en/housing/housing-grants-and-schemes/) | SEAI, Citizens Information, Revenue, Department of Housing, local authorities, First Home Scheme | Short quoted facts (euro amounts with their sentence, dates, titles) from public official pages; no page text is kept. Check each publisher's terms before reuse beyond that. | 24 h | files | check | propertywatch |
+
+- **`rtb_rents`**: Average monthly rent in euro by half-year, town or area, number of bedrooms and property type, reduced to totals by bedroom count and by property type.
+- **`cbi_mortgage_rates`**: Monthly average mortgage interest rates on outstanding amounts and on new business, by type and fixing period. Statistical averages, not offers.
+- **`dhlgh_commencements`**: Monthly commencement notices for residential units by local authority since 2014, as the Department publishes them.
+- **`homelessness_reports`**: People in emergency accommodation by region and month: adults, age bands, accommodation type, citizenship, families and dependants. Administrative counts, not every person experiencing homelessness.
+- **`housing_grants`**: For each official grant or support page: title, description, the euro amounts it states with their sentences, dates it mentions, words that suggest it is closed, paused or open, a hash of its visible text and when the text last changed. Pages are discovered from the SEAI sitemap and Citizens Information's housing grants section.
+
 ## procurement
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
@@ -144,7 +160,7 @@ must not feed paid products until its row in the site's rights register says con
 | `cso_pxstat` | [CSO PxStat tables: prices, housing, population, labour, energy, environment](https://data.cso.ie/) | Central Statistics Office (CSO) | Creative Commons Attribution 4.0 | 24 h | files | open | - |
 | `eurostat` | [Eurostat: energy, prices, inflation, unemployment, GDP, emissions](https://ec.europa.eu/eurostat/data/database) | Eurostat (European Commission) | Eurostat reuse policy (CC BY 4.0 compatible; attribute Eurostat) | 24 h | files | open | - |
 
-- **`cso_pxstat`**: 55 CSO tables exactly as published (CSV), plus an index with row counts, sizes, hashes and source links.
+- **`cso_pxstat`**: 63 CSO tables exactly as published (CSV), plus an index with row counts, sizes, hashes and source links.
 - **`eurostat`**: 8 Eurostat datasets: small ones whole, large ones restricted to Ireland and the EU aggregate; with an index.
 
 ## transport
