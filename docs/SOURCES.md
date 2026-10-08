@@ -87,6 +87,26 @@ must not feed paid products until its row in the site's rights register says con
 - **`ue_water_assets`**: Public water supply zones with population, district metered areas, water treatment plants, pumping stations, water storage (names only), wastewater treatment plants with capacity, and wastewater agglomerations. Converted from Excel to CSV.
 - **`ue_tariffs`**: Metered (bands 1 to 5) and unmetered (bands 1 to 2) non-domestic tariffs for each published charging period, checked so combined = water + wastewater.
 
+## fuel
+
+| Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
+|---|---|---|---|---|---|---|---|
+| `eu_oil_bulletin` | [EU Weekly Oil Bulletin: consumer fuel prices and taxes, all member states, from 2005](https://energy.ec.europa.eu/data-and-analysis/weekly-oil-bulletin_en) | European Commission, Directorate-General for Energy | Reproduction authorised provided the source is acknowledged (Oil Bulletin copyright notice, European Communities) | 24 h | files | open | fuelwatch |
+| `revenue_mot` | [Revenue: Mineral Oil Tax rates since 2008 and the solid fuel and natural gas carbon tax schedules](https://www.revenue.ie/en/companies-and-charities/excise-and-licences/excise-duty-rates/mineral-oil-tax.aspx) | Revenue Commissioners | Published official rates (Revenue Tax and Duty Manual, Excise Duty Rates on Energy Products); check Revenue's terms for redistribution | 24 h | files | check | fuelwatch |
+| `eia_brent` | [US EIA Europe Brent spot price FOB, daily](https://www.eia.gov/dnav/pet/hist/RBRTED.htm) | U.S. Energy Information Administration | EIA data are public information; cite the U.S. Energy Information Administration as the source | 24 h | files | open | fuelwatch |
+| `ecb_fx` | [ECB euro foreign exchange reference rates (US dollar, sterling)](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) | European Central Bank | ECB statistics: reproduction permitted provided the source is acknowledged | 24 h | files | open | fuelwatch |
+| `seai_fuel` | [SEAI: domestic fuel price archive, energy by fuel, final energy consumption and National Energy Balance](https://www.seai.ie/data-and-insights/seai-statistics/energy-data-downloads) | Sustainable Energy Authority of Ireland (SEAI) | SEAI statistics (Creative Commons Attribution 4.0 for SEAI open data; check the page for each download); attribute SEAI | 168 h | files | check | fuelwatch |
+| `nora_volumes` | [NORA: monthly volumes of oil consumption subject to the levy](https://www.nora.ie/volumes-of-oil-consumption) | National Oil Reserves Agency (NORA) | Published by NORA; check the NORA terms of use before redistribution | 168 h | files | check | fuelwatch |
+| `fuel_policy_pages` | [Fuel support and tax pages: change monitor](https://www.gov.ie/) | Government of Ireland (gov.ie), Revenue | Metadata only: page title, a hash of the visible text, and the date the page states. No page text is kept. | 24 h | files | check | fuelwatch |
+
+- **`eu_oil_bulletin`**: Weekly pump prices with and without taxes for Euro-super 95, automotive diesel, heating gas oil, fuel oils and LPG in every member state, and Ireland's VAT, excise and other indirect tax tables as the Commission records them. Prices are euro per 1000 litres (per tonne for fuel oil).
+- **`revenue_mot`**: Mineral Oil Tax per 1,000 litres for petrol, auto-diesel, kerosene and marked gas oil for every rate period since 1 November 2008, split into non-carbon and carbon components, and the scheduled solid fuel and natural gas carbon tax rates. The hub checks that the parts add up to the total and that the manual agrees with Revenue's current page.
+- **`eia_brent`**: Daily Europe Brent spot price in US dollars per barrel from 1987.
+- **`ecb_fx`**: Daily euro reference rates against the US dollar and sterling from 1999 (units of currency per euro).
+- **`seai_fuel`**: Quarterly delivered prices for coal products, oils, LPG, wood fuels, gas and electricity (euro per unit and cent per kWh) back to 1990, annual final energy consumption by sector and fuel, energy by fuel, the National Energy Balance by year, and the SEAI conversion factors. Converted from Excel to CSV.
+- **`nora_volumes`**: Litres of gasoline, kerosene, gas oil, motor diesel and fuel oil released for consumption each month since 2008, including the biofuel share where reported.
+- **`fuel_policy_pages`**: Whether the government pages that describe fuel supports and fuel taxes have changed since an editor last reviewed them.
+
 ## governance
 
 | Key | Source | Publisher | Licence | Every | Tier | Rights | Used by |
@@ -124,7 +144,7 @@ must not feed paid products until its row in the site's rights register says con
 | `cso_pxstat` | [CSO PxStat tables: prices, housing, population, labour, energy, environment](https://data.cso.ie/) | Central Statistics Office (CSO) | Creative Commons Attribution 4.0 | 24 h | files | open | - |
 | `eurostat` | [Eurostat: energy, prices, inflation, unemployment, GDP, emissions](https://ec.europa.eu/eurostat/data/database) | Eurostat (European Commission) | Eurostat reuse policy (CC BY 4.0 compatible; attribute Eurostat) | 24 h | files | open | - |
 
-- **`cso_pxstat`**: 48 CSO tables exactly as published (CSV), plus an index with row counts, sizes, hashes and source links.
+- **`cso_pxstat`**: 55 CSO tables exactly as published (CSV), plus an index with row counts, sizes, hashes and source links.
 - **`eurostat`**: 8 Eurostat datasets: small ones whole, large ones restricted to Ireland and the EU aggregate; with an index.
 
 ## transport
