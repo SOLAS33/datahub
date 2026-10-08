@@ -11,6 +11,7 @@ from .catalogue import CkanOpenDatasets, DataGovIeCatalogue
 from .climate import ClimateDaily
 from .eirgrid import EirGridLive
 from .eirgrid_dd import EirGridDispatchDown
+from .fuel import EcbFx, EiaBrent, EuOilBulletin, FuelPolicyPages, NoraVolumes, RevenueMot, SeaiFuel
 from .energy_intl import NesoCarbon
 from .environment import MarineTideGauges, OpwWaterLevels
 from .epa import EpaBathingWater, EpaWfsLayers
@@ -30,6 +31,8 @@ REGISTRY: dict[str, Collector] = {c.key: c for c in (
     EtendersOpenData(), TedIreland(),
     # climate and environment
     ClimateDaily(), OpwWaterLevels(), MarineTideGauges(), EpaWfsLayers(), EpaBathingWater(), UisceEireannAssets(), UisceEireannTariffs(),
+    # fuel: prices, taxes, crude, exchange rates, heating fuels, energy use, supports
+    EuOilBulletin(), RevenueMot(), EiaBrent(), EcbFx(), SeaiFuel(), NoraVolumes(), FuelPolicyPages(),
     # companies, statistics, property, transport, governance, energy abroad, catalogue
     CroCompanies(), CsoPxStat(), Eurostat(), PropertyPriceRegister(), PlanningPipeline(), NtaGtfs(), Oireachtas(), EuSanctions(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
 

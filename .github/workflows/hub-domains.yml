@@ -31,7 +31,7 @@ jobs:
         env:
           ONLY: ${{ github.event.inputs.domain }}
         run: |
-          ALL='["business","catalogue","climate","energy_intl","environment","governance","procurement","property","statistics","transport"]'
+          ALL='["business","catalogue","climate","energy_intl","environment","fuel","governance","procurement","property","statistics","transport"]'
           if [ -n "$ONLY" ]; then echo "domains=[\"$ONLY\"]" >> "$GITHUB_OUTPUT"; else echo "domains=$ALL" >> "$GITHUB_OUTPUT"; fi
 
   run:
