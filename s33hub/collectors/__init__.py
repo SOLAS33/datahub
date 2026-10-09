@@ -15,6 +15,7 @@ from .fuel import EcbFx, EiaBrent, EuOilBulletin, FuelPolicyPages, NoraVolumes, 
 from .energy_intl import NesoCarbon
 from .environment import MarineTideGauges, OpwWaterLevels
 from .epa import EpaBathingWater, EpaWfsLayers
+from .housing import CbiMortgageRates, DhlghCommencements, HomelessnessReports, HousingGrants, RtbRents
 from .governance import EuSanctions, Oireachtas
 from .mirrors import AcpDataCentres, CsoMec02, PlanningDataCentres
 from .property import PlanningPipeline, PropertyPriceRegister
@@ -33,6 +34,8 @@ REGISTRY: dict[str, Collector] = {c.key: c for c in (
     ClimateDaily(), OpwWaterLevels(), MarineTideGauges(), EpaWfsLayers(), EpaBathingWater(), UisceEireannAssets(), UisceEireannTariffs(),
     # fuel: prices, taxes, crude, exchange rates, heating fuels, energy use, supports
     EuOilBulletin(), RevenueMot(), EiaBrent(), EcbFx(), SeaiFuel(), NoraVolumes(), FuelPolicyPages(),
+    # housing: rents, mortgage rates, commencements, homelessness, grants
+    RtbRents(), CbiMortgageRates(), DhlghCommencements(), HomelessnessReports(), HousingGrants(),
     # companies, statistics, property, transport, governance, energy abroad, catalogue
     CroCompanies(), CsoPxStat(), Eurostat(), PropertyPriceRegister(), PlanningPipeline(), NtaGtfs(), Oireachtas(), EuSanctions(), NesoCarbon(), DataGovIeCatalogue(), CkanOpenDatasets())}
 
