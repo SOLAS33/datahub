@@ -123,10 +123,16 @@ class CbiMortgageRates(Collector):
         if not res_:
             raise RuntimeError("no CSV resource on the Central Bank mortgage rates dataset")
         src = res_[0]["url"]
+        def parse(body: bytes):
+            t = body.decode("utf-8-sig", "replace")
+            return t, list(csv.reader(io.StringIO(t)))
+
         raw = get_with_retry(client, src, timeout=120).content
+        text, rows = parse(raw)
+        if len(rows) < 24 or "date" not in rows[0][0].lower():      # an empty or blocked answer to a Python client: the same file is served to curl
+            raw = page_get(client, src)
+            text, rows = parse(raw)
         log_fetch(session, self.key, src, sha256(raw), len(raw), self.licence)
-        text = raw.decode("utf-8-sig", "replace")
-        rows = list(csv.reader(io.StringIO(text)))
         if len(rows) < 24 or "date" not in rows[0][0].lower():
             raise ValueError(f"unexpected Central Bank file: {len(rows)} rows, header {rows[0][:2] if rows else None}")
         publish_table(items, "rates", "v1/housing/cbi/mortgage_rates.csv.gz", gz(text.encode("utf-8")), "application/gzip", len(rows) - 1,
