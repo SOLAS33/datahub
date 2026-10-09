@@ -75,10 +75,10 @@ th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);verti
 .healthy{color:#1a8a3a}.stale{color:#b07800}.failing{color:#c0392b}code{background:var(--card);padding:2px 6px;border-radius:6px}
 .wrap{overflow-x:auto}</style></head><body><main>
 <h1>Solas33 Data Hub</h1>
-<p>Public Irish energy, grid and weather data, collected once from the original publishers, stored with full provenance and shared by every Solas33 site.
+<p>Public Irish data on energy and the grid, weather and climate, water and the environment, fuel, housing and property, tenders, companies and statistics, collected once from the original publishers, stored with full provenance and shared by every Solas33 site.
 Each file names its source; every payload's URL, retrieval time and SHA-256 are in the <a href="/v1/ledger/">ledger</a>. Machine-readable: <a href="/v1/catalog.json">catalog.json</a>,
 <a href="/v1/status.json">status.json</a>, <a href="/v1/events.json">events.json</a>, full snapshot <a href="/v1/hub.sqlite.gz">hub.sqlite.gz</a>.</p>
-<p class="m">${esc(cat.licence || "")} · Generated ${esc((cat.generated_at || "").slice(0, 16).replace("T", " "))} UTC · Used by <a href="https://gridwatch.solas33.com">GridWatch Ireland</a> and <a href="https://dcwatch.solas33.com">DCWatch Ireland</a>.</p>
+<p class="m">${esc(cat.licence || "")} · Generated ${esc((cat.generated_at || "").slice(0, 16).replace("T", " "))} UTC · Used by <a href="https://dcwatch.solas33.com">DCWatch</a>, <a href="https://gridwatch.solas33.com">GridWatch</a>, <a href="https://tenderwatch.solas33.com">TenderWatch</a>, <a href="https://firmwatch.solas33.com">FirmWatch</a>, <a href="https://waterwatch.solas33.com">WaterWatch</a>, <a href="https://fuelwatch.solas33.com">FuelWatch</a> and <a href="https://propertywatch.solas33.com">PropertyWatch</a>.</p>
 <h2>Sources</h2><div class="wrap"><table><tr><th>Source</th><th>Publisher</th><th>Collected</th><th>Status</th><th>Last success (UTC)</th><th>Used by</th></tr>${srcs}</table></div>
 <h2>Datasets</h2><div class="wrap"><table><tr><th>File</th><th>Contents</th><th>Original publisher</th><th>Updated (UTC)</th></tr>${rows}</table></div>
 <p class="m">Code: <a href="https://github.com/SOLAS33/datahub">github.com/SOLAS33/datahub</a>. Contact: hello@solas33.com</p>
