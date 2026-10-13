@@ -5,7 +5,7 @@ name: prebuild
 
 on:
   workflow_run:
-    workflows: ["hub", "hub-domains"]
+    workflows: ["hub-collect-publish", "hub-domains"]
     types: [completed]
   schedule:
     - cron: "17,47 * * * *"
