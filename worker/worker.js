@@ -46,9 +46,8 @@ async function merged(env, kind) {
   return obj ? await obj.json() : kind === "catalog" ? { files: [] } : { sources: [] };
 }
 
-async function indexHtml(env) {
-  const cat = await merged(env, "catalog");
-  const status = await merged(env, "status");
+/** The public index page from a merged catalogue and merged status. Pure: used by the build step (tools/prebuild.mjs) and by the Worker as a fallback. */
+export function renderIndex(cat, status) {
   const groups = {};
   for (const f of cat.files || []) {
     const g = f.path.split("/").slice(1, 3).join("/").replace(/\.(csv|json|gz)$/, "");
@@ -86,6 +85,18 @@ Each file names its source; every payload's URL, retrieval time and SHA-256 are 
   return html;
 }
 
+async function indexHtml(env) {
+  return renderIndex(await merged(env, "catalog"), await merged(env, "status"));
+}
+
+/** The `v1/` listing from the catalogue (every published data file) plus the hub's own files, in the same shape the live listing uses. */
+export function listingFromCatalog(cat, extras = []) {
+  const files = [...(cat.files || []).map((f) => ({ path: f.path, bytes: f.bytes, uploaded: f.updated || null, etag: f.sha256 || null })), ...extras];
+  const seen = new Set();
+  const out = files.filter((f) => (seen.has(f.path) ? false : seen.add(f.path))).sort((a, b) => (a.path < b.path ? -1 : 1));
+  return JSON.stringify({ prefix: "v1/", files: out });
+}
+
 async function listingJson(env, prefix) {
   const out = [];
   let cursor;
@@ -118,7 +129,16 @@ export async function viaR2Cache(env, ctx, key, ttlMs, build, contentType, now =
   catch (e) { return { body: null, error: String(e && e.message || e) }; }
 }
 
-async function cachedPage(env, ctx, key, ttlMs, build, contentType, extra) {
+const PRE_MAX_AGE_MS = 26 * 3600e3;
+async function cachedPage(env, ctx, key, ttlMs, build, contentType, extra, preKey = null) {
+  // 1. the copy built when the data was published (see tools/prebuild.mjs): no work at all for the Worker
+  if (preKey) {
+    const pre = await env.HUB.get(`_pre/${preKey}`);
+    if (pre && pre.uploaded && Date.now() - pre.uploaded.getTime() < PRE_MAX_AGE_MS) {
+      return new Response(pre.body, { headers: { "content-type": contentType, "cache-control": "public, max-age=300", ...CORS, ...extra } });
+    }
+  }
+  // 2. otherwise built here at most once per few minutes and kept in R2 (viaR2Cache)
   const r = await viaR2Cache(env, ctx, key, ttlMs, build, contentType);
   if (r.body == null) return new Response(JSON.stringify({ error: "temporarily unavailable" }), { status: 503, headers: { "content-type": "application/json", "retry-after": "60", ...CORS } });
   return new Response(r.body, { headers: { "content-type": contentType, "cache-control": "public, max-age=300", ...CORS, ...extra } });
@@ -130,12 +150,12 @@ export default {
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("read-only", { status: 405, headers: CORS });
     const url = new URL(request.url);
     const key = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
-    if (key === "" || key === "index.html") return cachedPage(env, ctx, "index.html", 15 * 60e3, () => indexHtml(env), "text/html; charset=utf-8");
+    if (key === "" || key === "index.html") return cachedPage(env, ctx, "index.html", 15 * 60e3, () => indexHtml(env), "text/html; charset=utf-8", undefined, "index.html");
     if (key === "v1/catalog.json" || key === "v1/status.json") {
       const name = key.includes("catalog") ? "catalog" : "status";
-      return cachedPage(env, ctx, `${name}.json`, 5 * 60e3, async () => JSON.stringify(await merged(env, name)), "application/json");
+      return cachedPage(env, ctx, `${name}.json`, 5 * 60e3, async () => JSON.stringify(await merged(env, name)), "application/json", undefined, `${name}.json`);
     }
-    if (key.endsWith("/")) return cachedPage(env, ctx, `list/${key}.json`, 10 * 60e3, () => listingJson(env, key), "application/json");
+    if (key.endsWith("/")) return cachedPage(env, ctx, `list/${key}.json`, 10 * 60e3, () => listingJson(env, key), "application/json", undefined, `list/${key}.json`);
     const cache = caches.default;
     const hit = await cache.match(request);
     if (hit) return hit;

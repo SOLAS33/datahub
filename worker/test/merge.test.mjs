@@ -42,3 +42,30 @@ assert.equal(r.body, "page v2", "build failed: the last good copy still answers"
 r = await viaR2Cache(env, ctx, "other.json", 900000, bad, "application/json", T0);
 assert.equal(r.body, null); assert.ok(r.error);
 console.log("cache tests ok");
+
+// the pure renderers used by the build step
+import { renderIndex, listingFromCatalog } from "../worker.js";
+const cat = { generated_at: "2026-10-14T10:00:00Z", licence: "L", files: [
+  { path: "v1/eirgrid/demand/2026-10.csv", description: "Demand", publisher: "EirGrid", updated: "2026-10-14T09:00:00Z", bytes: 10, sha256: "a" },
+  { path: "v1/eirgrid/demand/2026-09.csv", description: "Demand", publisher: "EirGrid", updated: "2026-10-01T09:00:00Z", bytes: 9, sha256: "b" } ] };
+const html = renderIndex(cat, { sources: [{ name: "EirGrid demand", domain: "energy", publisher: "EirGrid", every_hours: 1, state: "healthy", last_ok: "2026-10-14T09:00:00Z", used_by: ["GridWatch"] }] });
+assert.match(html, /Solas33 Data Hub/); assert.match(html, /eirgrid\/demand/); assert.match(html, /\+1 more/); assert.match(html, /healthy/);
+const lst = JSON.parse(listingFromCatalog(cat, [{ path: "v1/events.json", bytes: 5 }, { path: "v1/eirgrid/demand/2026-10.csv", bytes: 1 }]));
+assert.equal(lst.prefix, "v1/"); assert.equal(lst.files.length, 3, "extras are added once, catalogue entries win");
+assert.deepEqual(lst.files.map((f) => f.path), ["v1/eirgrid/demand/2026-09.csv", "v1/eirgrid/demand/2026-10.csv", "v1/events.json"]);
+console.log("prebuild renderer tests ok");
+
+// pre-built copies are served as they are, and ignored once they are over a day old
+import worker from "../worker.js";
+const pre = new Map();
+const now = Date.now();
+const env2 = { HUB: { async get(k) { const o = pre.get(k) || store.get(k); return o ? { body: o.body, uploaded: o.uploaded, customMetadata: o.meta } : null; }, async put(k, body, o) { store.set(k, { body, meta: o && o.customMetadata, uploaded: new Date() }); }, async list() { return { objects: [], truncated: false }; } } };
+pre.set("_pre/index.html", { body: "PREBUILT", uploaded: new Date(now - 3600e3) });
+const ctx2 = { waitUntil: (p) => pending.push(p) };
+let resp = await worker.fetch(new Request("https://data.solas33.com/"), env2, ctx2);
+assert.equal(await resp.text(), "PREBUILT");
+pre.set("_pre/index.html", { body: "OLD", uploaded: new Date(now - 30 * 3600e3) });
+store.delete("_cache/index.html");
+resp = await worker.fetch(new Request("https://data.solas33.com/"), env2, ctx2);
+assert.notEqual(await resp.text(), "OLD", "a pre-built copy over 26 hours old is not trusted");
+console.log("prebuild serving tests ok");

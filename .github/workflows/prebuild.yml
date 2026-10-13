@@ -1,0 +1,32 @@
+# Builds the public pages (index, merged catalogue and status, v1/ listing) once and stores them in R2 under _pre/, so the Worker at
+# data.solas33.com only hands over a stored file. Runs after every publish, and every 30 minutes as a safety net.
+# Why: building them per request exceeded the free Workers plan's CPU limit and made a share of requests fail.
+name: prebuild
+
+on:
+  workflow_run:
+    workflows: ["hub", "hub-domains"]
+    types: [completed]
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: prebuild
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm i -g wrangler@4 >/dev/null
+      - name: Build and store the public pages
+        run: node tools/prebuild.mjs
