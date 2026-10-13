@@ -46,7 +46,7 @@ async function merged(env, kind) {
   return obj ? await obj.json() : kind === "catalog" ? { files: [] } : { sources: [] };
 }
 
-async function index(env) {
+async function indexHtml(env) {
   const cat = await merged(env, "catalog");
   const status = await merged(env, "status");
   const groups = {};
@@ -83,10 +83,10 @@ Each file names its source; every payload's URL, retrieval time and SHA-256 are 
 <h2>Datasets</h2><div class="wrap"><table><tr><th>File</th><th>Contents</th><th>Original publisher</th><th>Updated (UTC)</th></tr>${rows}</table></div>
 <p class="m">Code: <a href="https://github.com/SOLAS33/datahub">github.com/SOLAS33/datahub</a>. Contact: hello@solas33.com</p>
 </main></body></html>`;
-  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120", ...CORS } });
+  return html;
 }
 
-async function listing(env, prefix) {
+async function listingJson(env, prefix) {
   const out = [];
   let cursor;
   do {
@@ -94,7 +94,34 @@ async function listing(env, prefix) {
     for (const o of r.objects) out.push({ path: o.key, bytes: o.size, uploaded: o.uploaded, etag: o.etag });
     cursor = r.truncated ? r.cursor : undefined;
   } while (cursor && out.length < 5000);
-  return new Response(JSON.stringify({ prefix, files: out }, null, 1), { headers: { "content-type": "application/json", "cache-control": "public, max-age=120", ...CORS } });
+  return JSON.stringify({ prefix, files: out });
+}
+
+// The index page and the directory listings are expensive to build (they read and parse every domain's catalogue: tens of milliseconds of CPU,
+// where this plan allows ten) and the same for everyone, so they are built at most once every few minutes and kept in R2 under _cache/.
+// Readers always get the stored copy at once; when it is older than `ttlMs` a refresh runs in the background. If building fails, the last
+// good copy is still served, and only a hub with no copy at all answers 503 (with Retry-After) instead of crashing.
+export async function viaR2Cache(env, ctx, key, ttlMs, build, contentType, now = Date.now()) {
+  const hit = await env.HUB.get(`_cache/${key}`);
+  const builtAt = hit && hit.customMetadata && Date.parse(hit.customMetadata.built);
+  const fresh = hit && builtAt && now - builtAt < ttlMs;
+  const refresh = async () => {
+    const body = await build();
+    await env.HUB.put(`_cache/${key}`, body, { httpMetadata: { contentType }, customMetadata: { built: new Date(now).toISOString() } });
+    return body;
+  };
+  if (hit) {
+    if (!fresh) ctx.waitUntil(refresh().catch(() => {}));
+    return { body: hit.body, stale: !fresh };
+  }
+  try { return { body: await refresh(), stale: false }; }
+  catch (e) { return { body: null, error: String(e && e.message || e) }; }
+}
+
+async function cachedPage(env, ctx, key, ttlMs, build, contentType, extra) {
+  const r = await viaR2Cache(env, ctx, key, ttlMs, build, contentType);
+  if (r.body == null) return new Response(JSON.stringify({ error: "temporarily unavailable" }), { status: 503, headers: { "content-type": "application/json", "retry-after": "60", ...CORS } });
+  return new Response(r.body, { headers: { "content-type": contentType, "cache-control": "public, max-age=300", ...CORS, ...extra } });
 }
 
 export default {
@@ -103,17 +130,12 @@ export default {
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("read-only", { status: 405, headers: CORS });
     const url = new URL(request.url);
     const key = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
-    if (key === "" || key === "index.html") return index(env);
+    if (key === "" || key === "index.html") return cachedPage(env, ctx, "index.html", 15 * 60e3, () => indexHtml(env), "text/html; charset=utf-8");
     if (key === "v1/catalog.json" || key === "v1/status.json") {
-      const ck = new Request(new URL(`/${key}`, request.url).toString());
-      const hit = await caches.default.match(ck);
-      if (hit) return hit;
-      const body = await merged(env, key.includes("catalog") ? "catalog" : "status");
-      const resp = new Response(JSON.stringify(body, null, 1), { headers: { "content-type": "application/json", "cache-control": "public, max-age=300", ...CORS } });
-      if (request.method === "GET") ctx.waitUntil(caches.default.put(ck, resp.clone()));
-      return resp;
+      const name = key.includes("catalog") ? "catalog" : "status";
+      return cachedPage(env, ctx, `${name}.json`, 5 * 60e3, async () => JSON.stringify(await merged(env, name)), "application/json");
     }
-    if (key.endsWith("/")) return listing(env, key);
+    if (key.endsWith("/")) return cachedPage(env, ctx, `list/${key}.json`, 10 * 60e3, () => listingJson(env, key), "application/json");
     const cache = caches.default;
     const hit = await cache.match(request);
     if (hit) return hit;
