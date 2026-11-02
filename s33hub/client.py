@@ -14,6 +14,7 @@ import gzip
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 import httpx
@@ -24,13 +25,22 @@ from .db import make_engine
 UA = {"User-Agent": "Solas33Site/0.1 (+https://solas33.com)"}
 
 
+# The hub's 504s come in bursts of a minute or two, so three tries in a row can all land inside one.
+RETRY_PAUSES = (10, 20, 40)
+
+
 def _get(url: str, timeout: float = 120) -> httpx.Response:
     last = None
-    for _ in range(3):
+    for pause in (0, *RETRY_PAUSES):
+        time.sleep(pause)
         try:
             r = httpx.get(url, timeout=timeout, headers=UA, follow_redirects=True)
             r.raise_for_status()
             return r
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code < 500:
+                raise  # a missing file stays missing
+            last = e
         except httpx.HTTPError as e:
             last = e
     raise last  # type: ignore[misc]

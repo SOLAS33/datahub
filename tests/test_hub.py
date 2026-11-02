@@ -64,3 +64,41 @@ def test_publish_build_dry_run():
     assert {x["key"] for x in st["sources"]} >= {"eirgrid_live", "planning_npad_dc", "cso_mec02"}
     assert json.loads(catalog([], files))["files"] == []
     Uploader(dry_run=True).put("x", b"", "text/plain", "no-store")
+
+
+def _hub_client(monkeypatch, codes):
+    import httpx
+
+    from s33hub import client
+    pauses, calls = [], []
+    monkeypatch.setattr(client.time, "sleep", pauses.append)
+
+    def fake_get(url, **_):
+        calls.append(url)
+        return httpx.Response(codes[len(calls) - 1], request=httpx.Request("GET", url))
+    monkeypatch.setattr(client.httpx, "get", fake_get)
+    return client, pauses, calls
+
+
+def test_client_waits_out_a_burst_of_504s(monkeypatch):
+    client, pauses, calls = _hub_client(monkeypatch, [504, 504, 200])
+    assert client._get("https://x/y").status_code == 200
+    assert len(calls) == 3 and pauses == [0, 10, 20]
+
+
+def test_client_does_not_retry_a_missing_file(monkeypatch):
+    import httpx
+    import pytest
+    client, _, calls = _hub_client(monkeypatch, [404])
+    with pytest.raises(httpx.HTTPStatusError):
+        client._get("https://x/y")
+    assert len(calls) == 1
+
+
+def test_client_gives_up_after_the_last_pause(monkeypatch):
+    import httpx
+    import pytest
+    client, pauses, calls = _hub_client(monkeypatch, [504] * 4)
+    with pytest.raises(httpx.HTTPStatusError):
+        client._get("https://x/y")
+    assert len(calls) == 4 and sum(pauses) == 70
