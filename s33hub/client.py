@@ -38,8 +38,8 @@ def _get(url: str, timeout: float = 120) -> httpx.Response:
             r.raise_for_status()
             return r
         except httpx.HTTPStatusError as e:
-            if e.response.status_code < 500:
-                raise  # a missing file stays missing
+            if e.response.status_code != 429 and e.response.status_code < 500:
+                raise  # a missing file stays missing; 429 (rate limit) and 5xx are worth retrying
             last = e
         except httpx.HTTPError as e:
             last = e
