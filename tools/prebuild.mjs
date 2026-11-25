@@ -14,16 +14,36 @@ const BASE = process.env.HUB_BASE || "https://data.solas33.com";
 const BUCKET = process.env.HUB_BUCKET || "solas33-datahub";
 const DRY = process.argv.includes("--dry-run");
 
-async function getJson(path) {
-  for (let i = 0; i < 3; i++) {
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+const GAP_MS = 250;          // between requests: the zone's rate-limiting rule answers 429 to a quick burst of ~35 requests
+let last = 0;
+
+// One request to the public hub, paced, and retried on 429 (waiting as long as Retry-After says) or a server error.
+async function hubFetch(path, init = {}) {
+  let why = "";
+  for (let i = 0; i < 8; i++) {
+    const wait = last + GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    last = Date.now();
     try {
-      const r = await fetch(`${BASE}/${path}`, { headers: { "user-agent": "solas33-datahub-prebuild" } });
-      if (r.status === 404) return null;
-      if (r.ok) return await r.json();
-    } catch { /* retry */ }
-    await new Promise((res) => setTimeout(res, 1500 * (i + 1)));
+      const r = await fetch(`${BASE}/${path}`, { ...init, headers: { "user-agent": "solas33-datahub-prebuild" } });
+      if (r.status !== 429 && r.status < 500) return r;
+      why = `HTTP ${r.status}`;
+      const after = Number(r.headers.get("retry-after"));
+      await sleep(((after > 0 ? after : 2 * (i + 1)) + Math.random()) * 1000);
+    } catch (e) {
+      why = e.message;
+      await sleep(1500 * (i + 1));
+    }
   }
-  throw new Error(`could not read ${path}`);
+  throw new Error(`could not read ${path} (${why})`);
+}
+
+async function getJson(path) {
+  const r = await hubFetch(path);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`could not read ${path} (HTTP ${r.status})`);
+  return r.json();
 }
 
 async function parts(kind) {
@@ -51,7 +71,7 @@ for (const dir of ["v1/ledger/", "v1/catalog/", "v1/status/"]) {
   for (const f of (l && l.files) || []) extras.push({ path: f.path, bytes: f.bytes, uploaded: f.uploaded, etag: f.etag });
 }
 for (const p of ["v1/events.json", "v1/hub.sqlite.gz", "v1/catalog.json", "v1/status.json"]) {
-  try { const h = await fetch(`${BASE}/${p}`, { method: "HEAD" }); if (h.ok) extras.push({ path: p, bytes: Number(h.headers.get("content-length")) || null, uploaded: h.headers.get("last-modified") || null, etag: h.headers.get("etag") }); } catch { /* optional */ }
+  try { const h = await hubFetch(p, { method: "HEAD" }); if (h.ok) extras.push({ path: p, bytes: Number(h.headers.get("content-length")) || null, uploaded: h.headers.get("last-modified") || null, etag: h.headers.get("etag") }); } catch { /* optional */ }
 }
 
 const outputs = [
